@@ -9,6 +9,11 @@ MAC_RE = re.compile(r'^([0-9A-F]{2}:){5}[0-9A-F]{2}$')
 LOGIN_RE = re.compile(r'guest account ID "([^"]+)" \[login\]')
 
 
+def dev_label(mac, name):
+    """'MAC (hostname)' - the hostname is the Name column of the usage export."""
+    return f'{mac} ({name})' if name else mac
+
+
 def parse_event_log(fileobj):
     """Return (logins{mac: Counter(user)}, last{mac: (dt, user)})."""
     wb = openpyxl.load_workbook(fileobj, read_only=True, data_only=True)
@@ -101,8 +106,9 @@ def merge(event_fileobj, usage_fileobj):
     per_user = collections.OrderedDict()
     for r in rows:
         if r['user']:
-            p = per_user.setdefault(r['user'], {'macs': [], 'tot': 0.0})
+            p = per_user.setdefault(r['user'], {'macs': [], 'devs': [], 'tot': 0.0})
             p['macs'].append(r['mac'])
+            p['devs'].append(dev_label(r['mac'], r['name']))
             p['tot'] += r['tot']
     per_user = collections.OrderedDict(sorted(per_user.items(), key=lambda x: -x[1]['tot']))
     unmatched = [r for r in rows if not r['user']]
@@ -120,17 +126,17 @@ def build_xlsx(rows, per_user, unmatched):
     out = openpyxl.Workbook()
     s = out.active
     s.title = 'Device usage by user'
-    s.append(['User ID (primary)', 'MAC address', 'Device name', 'Upload (MB)', 'Download (MB)',
+    s.append(['User ID (primary)', 'MAC address', 'Hostname', 'Upload (MB)', 'Download (MB)',
               'Total (MB)', 'Total (GB)', '% Usage', 'Logins', 'All user IDs seen (logins)', 'Last login user', 'Last login time'])
     for r in rows:
         s.append([r['user'], r['mac'], r['name'], r['up'], r['down'], r['tot'], r['gb'], r['pct'],
                   r['logins'], r['users'], r['last_user'], r['last_time']])
     s2 = out.create_sheet('Usage per user')
-    s2.append(['User ID', 'Devices (MACs)', 'No. of devices', 'Total (MB)', 'Total (GB)'])
+    s2.append(['User ID', 'Devices (MAC (hostname))', 'No. of devices', 'Total (MB)', 'Total (GB)'])
     for u, p in per_user.items():
-        s2.append([u, ', '.join(p['macs']), len(p['macs']), round(p['tot'], 2), round(p['tot'] / 1024, 2)])
+        s2.append([u, ', '.join(p['devs']), len(p['macs']), round(p['tot'], 2), round(p['tot'] / 1024, 2)])
     s3 = out.create_sheet('Unmatched devices')
-    s3.append(['MAC address', 'Device name', 'Total (MB)', 'Note'])
+    s3.append(['MAC address', 'Hostname', 'Total (MB)', 'Note'])
     for r in unmatched:
         s3.append([r['mac'], r['name'], r['tot'], '' if r['is_mac'] else 'Not a MAC (IP / non-portal traffic)'])
     for sh in out:

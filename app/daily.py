@@ -4,7 +4,7 @@ from datetime import datetime, date
 import openpyxl
 from openpyxl.styles import Font, PatternFill
 from openpyxl.utils import get_column_letter
-from merge import parse_usage, LOGIN_RE, MAC_RE
+from merge import parse_usage, LOGIN_RE, MAC_RE, dev_label
 
 DATE_RE = re.compile(r'(\d{4}-\d{2}-\d{2})')
 
@@ -101,15 +101,18 @@ def compute(ev, usage_by_day):
     detail.sort(key=lambda r: (r['day'], -r['tot']))
     pivot = collections.defaultdict(lambda: {d: 0.0 for d in days})
     macs = collections.defaultdict(set)
+    names = {}
     for r in detail:
         if r['user']:
             pivot[r['user']][r['day']] += r['tot']
             macs[r['user']].add(r['mac'])
+            if r['name']:
+                names[r['mac']] = r['name']
     pivot_rows = []
     for u, per in pivot.items():
         total = sum(per.values())
         pivot_rows.append({'user': u, 'per': per, 'total': round(total, 2), 'gb': round(total / 1024, 2),
-                           'macs': sorted(macs[u]), 'days_active': sum(1 for v in per.values() if v > 0)})
+                           'macs': sorted(macs[u]), 'devs': [dev_label(m, names.get(m, '')) for m in sorted(macs[u])], 'days_active': sum(1 for v in per.values() if v > 0)})
     pivot_rows.sort(key=lambda r: -r['total'])
     unmatched_tot = sum(r['tot'] for r in detail if not r['user'])
     summary = {'days': len(days), 'first': days[0] if days else None, 'last': days[-1] if days else None,
@@ -153,8 +156,9 @@ def compute_period(ev, usage, start, end):
     per_user = collections.OrderedDict()
     for r in rows:
         if r['user']:
-            p = per_user.setdefault(r['user'], {'macs': [], 'tot': 0.0})
+            p = per_user.setdefault(r['user'], {'macs': [], 'devs': [], 'tot': 0.0})
             p['macs'].append(r['mac'])
+            p['devs'].append(dev_label(r['mac'], r['name']))
             p['tot'] += r['tot']
     per_user = collections.OrderedDict(sorted(per_user.items(), key=lambda x: -x[1]['tot']))
     unmatched = [r for r in rows if not r['user']]
@@ -183,21 +187,21 @@ def build_daily_xlsx(detail, pivot_rows, days):
     out = openpyxl.Workbook()
     s = out.active
     s.title = 'Usage per user per day'
-    s.append(['User ID'] + [d.strftime('%d %b') for d in days] + ['Total (MB)', 'Total (GB)', 'Days active', 'No. of devices', 'MACs'])
+    s.append(['User ID'] + [d.strftime('%d %b') for d in days] + ['Total (MB)', 'Total (GB)', 'Days active', 'No. of devices', 'MACs (hostname)'])
     for r in pivot_rows:
-        s.append([r['user']] + [round(r['per'][d], 2) for d in days] + [r['total'], r['gb'], r['days_active'], len(r['macs']), ', '.join(r['macs'])])
+        s.append([r['user']] + [round(r['per'][d], 2) for d in days] + [r['total'], r['gb'], r['days_active'], len(r['macs']), ', '.join(r['devs'])])
     # daily totals row
     s.append(['TOTAL'] + [round(sum(r['per'][d] for r in pivot_rows), 2) for d in days] + [round(sum(r['total'] for r in pivot_rows), 2), '', '', '', ''])
     for c in s[s.max_row]:
         c.font = Font(bold=True)
     s2 = out.create_sheet('Device-day detail')
-    s2.append(['Date', 'User ID', 'MAC address', 'Device name', 'Upload (MB)', 'Download (MB)', 'Total (MB)', 'Basis', 'Users logged in that day (logins)'])
+    s2.append(['Date', 'User ID', 'MAC address', 'Hostname', 'Upload (MB)', 'Download (MB)', 'Total (MB)', 'Basis', 'Users logged in that day (logins)'])
     for r in detail:
         s2.append([r['day'].isoformat(), r['user'], r['mac'], r['name'], r['up'], r['down'], r['tot'],
                    {'login': 'Login same day', 'carried': 'Carried from earlier login', 'inferred': 'Inferred from next login (log starts later)', '': ('No login found' if r['is_mac'] else 'Not a MAC')}[r['basis']],
                    r['seen']])
     s3 = out.create_sheet('Unmatched')
-    s3.append(['Date', 'MAC / ID', 'Device name', 'Total (MB)', 'Note'])
+    s3.append(['Date', 'MAC / ID', 'Hostname', 'Total (MB)', 'Note'])
     for r in detail:
         if not r['user']:
             s3.append([r['day'].isoformat(), r['mac'], r['name'], r['tot'], 'No login found' if r['is_mac'] else 'Not a MAC (IP / non-portal traffic)'])

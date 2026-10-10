@@ -4,9 +4,11 @@
   <div class="row">
     <div><label>Site</label><input type="text" name="site" value="{{ site }}" placeholder="auto from file name (e.g. SITE1)" list="sites"><datalist id="sites">{% for s in sites %}<option value="{{ s }}">{% endfor %}</datalist></div>
     <div style="flex:1"><label>Files — event logs (.xlsx) and daily usage exports (.csv), any number, any order</label><input type="file" name="files" multiple required></div>
+    <div><label>Usage files are</label><select name="kind"><option value="auto">Auto (2 dates in name = 7-day)</option><option value="daily">Daily (1 day each)</option><option value="period">7-day / period total</option></select></div>
+    <div><label>Period start</label><input type="date" name="period_start"></div>
     <button>Import</button>
   </div>
-  <small>Event logs may overlap (the portal exports 10,000 rows at a time) — only new logins are added. A daily usage file replaces any earlier import for the same site and day. Site is read from the file name (<code>…_SITE1_-_Starlink_…</code>) unless you type one.</small>
+  <small>Event logs may overlap (the portal exports 10,000 rows at a time) — only new logins are added. A daily usage file replaces any earlier import for the same site and day. A <b>7-day file</b> is one export covering a whole period: put both dates in the file name (<code>…_2026-10-03_2026-10-09.csv</code>) or pick the start date above (end = start + 6 days); it is stored as a period total, separate from the per-day report. Site is read from the file name (<code>…_SITE1_-_Starlink_…</code>) unless you type one.</small>
 </form>
 {% if st %}
 <div class="stats">
@@ -21,6 +23,20 @@
   {% if st.gaps %}<br><b>Missing:</b> {% for d in st.gaps %}<span class="badge gap">{{ d }}</span>{% endfor %}{% endif %}
   <div style="margin-top:14px"><a href="{{ url_for('report', site=site) }}"><button type="button">Open report →</button></a></div>
 </div>
+{% if st.periods %}<div class="card"><b>7-day / period files:</b>
+{% for p in st.periods %}<a href="{{ url_for('period', site=site, start=p[0], end=p[1]) }}" class="badge">{{ p[0] }} → {{ p[1] }} ({{ p[2] }} devices, {{ '{:,.1f}'.format(p[3]/1024) }} GB)</a>{% endfor %}</div>{% endif %}
+<form class="card" method="post" action="{{ url_for('do_delete') }}" onsubmit="return confirm('Delete the selected data for ' + this.site.value + '? This cannot be undone.')">
+  <input type="hidden" name="_csrf" value="{{ csrf_token() }}"><input type="hidden" name="site" value="{{ site }}">
+  <b>Delete data for {{ site }}</b>
+  <div class="row" style="margin-top:8px">
+    <div><label>What</label><select name="what"><option value="usage">Daily usage</option><option value="periods">7-day / period usage</option><option value="logins">Event-log logins</option><option value="all">Everything for this site</option></select></div>
+    <div><label>From (optional)</label><input type="date" name="start"></div>
+    <div><label>To (optional)</label><input type="date" name="end"></div>
+    <div><label>Everything: type site name</label><input type="text" name="confirm" placeholder="{{ site }}" autocomplete="off"></div>
+    <button style="background:#b3261e;border-color:#b3261e">Delete</button>
+  </div>
+  <small>Blank dates = no limit. Periods are matched when they overlap the range. “Everything” ignores the dates, also clears the import history, and needs the site name typed.</small>
+</form>
 <div class="card"><b>Recent imports</b>
 <div class="wrap" style="max-height:40vh;margin-top:8px"><table><thead><tr><th>When</th><th>Kind</th><th>File</th><th class="num">Rows</th><th class="num">New</th><th>From</th><th>To</th></tr></thead>
 <tbody>{% for i in st.imports %}<tr><td>{{ i[0] }}</td><td>{{ i[1] }}</td><td>{{ i[2] }}</td><td class="num">{{ i[3] }}</td><td class="num">{{ i[4] }}</td><td>{{ i[5] }}</td><td>{{ i[6] }}</td></tr>{% endfor %}</tbody></table></div></div>

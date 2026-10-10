@@ -14,6 +14,17 @@ def date_from_name(name):
     return date.fromisoformat(m.group(1)) if m else None
 
 
+def dates_from_name(name):
+    """All YYYY-MM-DD dates in a file name, in order (a 7-day export carries a start and an end date)."""
+    out = []
+    for d in DATE_RE.findall(name or ''):
+        try:
+            out.append(date.fromisoformat(d))
+        except ValueError:
+            pass
+    return out
+
+
 def parse_events_by_day(fileobj):
     """Return {mac: [(datetime, user), ...]} sorted ascending (successful logins only)."""
     wb = openpyxl.load_workbook(fileobj, read_only=True, data_only=True)
@@ -109,6 +120,48 @@ def compute(ev, usage_by_day):
                'unmatched_gb': round(unmatched_tot / 1024, 2),
                'total_gb': round(sum(r['tot'] for r in detail) / 1024, 2)}
     return detail, pivot_rows, days, summary
+
+
+def compute_period(ev, usage, start, end):
+    """One usage file covering start..end (e.g. 7 days): one row per device, user = most logins inside the period;
+    else last earlier login (carried); else next later login (inferred). Same row shape as merge.merge()."""
+    rows = []
+    logged = set()
+    for mac, u in usage.items():
+        evl = ev.get(mac, []) if u['is_mac'] else []
+        inside = [(dt, usr) for dt, usr in evl if start <= dt.date() <= end]
+        user = users = lt = lu = ''
+        n = 0
+        if inside:
+            c = collections.Counter(usr for _, usr in inside)
+            user = c.most_common(1)[0][0]
+            users = ', '.join(f'{x} ({k})' for x, k in c.most_common())
+            lt, lu, n = inside[-1][0].strftime('%Y-%m-%d %H:%M'), inside[-1][1], len(inside)
+        else:
+            before = [x for x in evl if x[0].date() < start]
+            after = [x for x in evl if x[0].date() > end]
+            if before:
+                user, users = before[-1][1], '(carried from earlier login)'
+            elif after:
+                user, users = after[0][1], '(inferred from next login)'
+        if evl:
+            logged.add(mac)
+        rows.append({'user': user, 'mac': mac, 'name': u['name'], 'up': round(u['up'], 2), 'down': round(u['down'], 2),
+                     'tot': round(u['tot'], 2), 'gb': round(u['tot'] / 1024, 2), 'logins': n, 'users': users,
+                     'last_user': lu, 'last_time': lt, 'pct': round(u.get('pct', 0.0), 2), 'is_mac': u['is_mac']})
+    rows.sort(key=lambda r: -r['tot'])
+    per_user = collections.OrderedDict()
+    for r in rows:
+        if r['user']:
+            p = per_user.setdefault(r['user'], {'macs': [], 'tot': 0.0})
+            p['macs'].append(r['mac'])
+            p['tot'] += r['tot']
+    per_user = collections.OrderedDict(sorted(per_user.items(), key=lambda x: -x[1]['tot']))
+    unmatched = [r for r in rows if not r['user']]
+    summary = {'non_mac': sum(1 for r in rows if not r['is_mac']), 'devices': len(rows),
+               'matched': len(rows) - len(unmatched), 'unmatched': len(unmatched), 'users': len(per_user),
+               'login_macs': len(logged), 'total_gb': round(sum(r['tot'] for r in rows) / 1024, 2)}
+    return rows, per_user, unmatched, summary
 
 
 def _style(sh):

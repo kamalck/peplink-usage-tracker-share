@@ -12,6 +12,7 @@ services:
       - SECRET_KEY=${SECRET_KEY:-}
       - ADMIN_USERNAME=${ADMIN_USERNAME:-admin}
       - ADMIN_PASSWORD=${ADMIN_PASSWORD:-}
+      - ADMIN_USERS=${ADMIN_USERS:-}
     healthcheck:
       test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:5020/health', timeout=3)"]
       interval: 30s

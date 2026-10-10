@@ -2,10 +2,10 @@ import os, sys, argparse, hmac, secrets, time
 from datetime import datetime, date, timedelta
 from flask import Flask, render_template, request, send_file, flash, redirect, url_for, session
 from merge import merge, build_xlsx
-from daily import merge_daily, build_daily_xlsx, compute
+from daily import merge_daily, build_daily_xlsx, compute, compute_period, dates_from_name
 import store
 
-VERSION = '1.3.0'
+VERSION = '1.4.0'
 
 
 def _secret_key():
@@ -39,6 +39,20 @@ MIME = 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
 # Login comes from the environment (.env on the host) - nothing secret is ever in the repo.
 ADMIN_USERNAME = os.environ.get('ADMIN_USERNAME', 'admin').strip() or 'admin'
 ADMIN_PASSWORD = os.environ.get('ADMIN_PASSWORD', '')
+
+
+def _accounts():
+    """{user: password}: ADMIN_USERNAME/ADMIN_PASSWORD plus any 'user:password;user2:password2' in ADMIN_USERS."""
+    acc = {ADMIN_USERNAME: ADMIN_PASSWORD} if ADMIN_PASSWORD else {}
+    for pair in os.environ.get('ADMIN_USERS', '').split(';'):
+        u, sep, pw = pair.partition(':')
+        u = u.strip()
+        if sep and u and pw:
+            acc.setdefault(u, pw)
+    return acc
+
+
+ACCOUNTS = _accounts()
 OPEN_ENDPOINTS = {'health', 'login', 'static'}
 _fails = {}          # remote addr -> [failures, window start, blocked until]
 MAX_FAILS, FAIL_WINDOW, BLOCK_SECONDS = 5, 600, 300
@@ -63,9 +77,9 @@ def gate():
     """Everything except /health, /login and static files needs the admin login. No password set = locked, not open."""
     if request.endpoint in OPEN_ENDPOINTS:
         return None
-    if not ADMIN_PASSWORD:
+    if not ACCOUNTS:
         return render_template('locked.html'), 503
-    if not session.get('auth'):
+    if not session.get('auth') or session.get('user') not in ACCOUNTS:
         nxt = request.full_path.rstrip('?') if request.method == 'GET' else ''
         return redirect(url_for('login', next=nxt))
     if request.method == 'POST' and not _same(request.form.get('_csrf'), session.get('csrf')):
@@ -81,7 +95,7 @@ def _safe_next(n):
 
 @app.route('/login', methods=['GET', 'POST'])
 def login():
-    if not ADMIN_PASSWORD:
+    if not ACCOUNTS:
         return render_template('locked.html'), 503
     nxt = request.values.get('next', '')
     if request.method == 'POST':
@@ -94,12 +108,15 @@ def login():
         if not _same(request.form.get('_csrf'), session.get('csrf')):
             flash('ERROR: session expired - please try again.')
             return render_template('login.html', next=nxt)
-        ok_user = _same(request.form.get('username', '').strip(), ADMIN_USERNAME)
-        ok_pass = _same(request.form.get('password', ''), ADMIN_PASSWORD)
-        if ok_user and ok_pass:
+        who = None
+        for name, pw in ACCOUNTS.items():          # no early exit: same work whichever account matches
+            if _same(request.form.get('username', '').strip(), name) & _same(request.form.get('password', ''), pw):
+                who = name
+        if who:
             _fails.pop(ip, None)
             session.clear()
             session['auth'] = True
+            session['user'] = who
             session.permanent = True
             return redirect(_safe_next(nxt))
         rec = _fails.get(ip)
@@ -152,6 +169,13 @@ def do_import():
     if not files:
         flash('No files selected.')
         return redirect(url_for('home', site=site))
+    kind = request.form.get('kind', 'auto')       # auto | daily | period (a 7-day export)
+    p_start = None
+    if request.form.get('period_start'):
+        try:
+            p_start = date.fromisoformat(request.form['period_start'])
+        except ValueError:
+            flash('ERROR: period start is not a date - ignored.')
     msgs = []
     for f in files:
         fsite = site or store.site_from_name(f.filename)
@@ -164,8 +188,13 @@ def do_import():
                 r = store.import_events(fsite, f.filename, f.stream)
                 msgs.append(f'{f.filename}: {r["rows"]} logins read, {r["added"]} new ({r["first"]} → {r["last"]})')
             elif low.endswith('.csv'):
-                r = store.import_usage(fsite, f.filename, f.stream)
-                msgs.append(f'{f.filename}: {r["rows"]} devices stored for {r["day"]}')
+                period = kind == 'period' or (kind == 'auto' and len(dates_from_name(f.filename)) >= 2)
+                if period:
+                    r = store.import_period(fsite, f.filename, f.stream, start=p_start)
+                    msgs.append(f'{f.filename}: {r["rows"]} devices stored for period {r["start"]} → {r["end"]}')
+                else:
+                    r = store.import_usage(fsite, f.filename, f.stream)
+                    msgs.append(f'{f.filename}: {r["rows"]} devices stored for {r["day"]}')
             else:
                 msgs.append(f'{f.filename}: ERROR unsupported file type (event log = .xlsx, usage = .csv)')
                 continue
@@ -175,6 +204,50 @@ def do_import():
     for m in msgs:
         flash(m)
     return redirect(url_for('home', site=site))
+
+
+@app.route('/delete', methods=['POST'])
+def do_delete():
+    site = (request.form.get('site') or '').strip().upper()
+    what = request.form.get('what', '')
+    if not site or what not in ('usage', 'periods', 'logins', 'all'):
+        flash('ERROR: choose a site and what to delete.')
+        return redirect(url_for('home', site=site))
+    rng = []
+    for k in ('start', 'end'):
+        v = request.form.get(k, '').strip()
+        try:
+            rng.append(date.fromisoformat(v) if v else None)
+        except ValueError:
+            flash(f'ERROR: "{v}" is not a date (use YYYY-MM-DD) - nothing deleted.')
+            return redirect(url_for('home', site=site))
+    if what == 'all' and request.form.get('confirm', '').strip().upper() != site:
+        flash(f'ERROR: to delete everything for {site}, type the site name in the confirm box - nothing deleted.')
+        return redirect(url_for('home', site=site))
+    n = store.delete_data(site, what, rng[0], rng[1])
+    label = {'usage': 'daily usage rows', 'periods': 'period usage rows', 'logins': 'logins', 'all': 'rows (everything)'}[what]
+    flash(f'Deleted {n} {label} for {site}.')
+    return redirect(url_for('home', site=site))
+
+
+@app.route('/period')
+def period():
+    site, all_sites = _site_arg()
+    try:
+        start, end = date.fromisoformat(request.args.get('start', '')), date.fromisoformat(request.args.get('end', ''))
+    except ValueError:
+        flash('ERROR: bad period dates.')
+        return redirect(url_for('home', site=site))
+    ev, usage = store.load_period(site, start, end)
+    if not usage:
+        flash('No such period stored for this site.')
+        return redirect(url_for('home', site=site))
+    rows, per_user, unmatched, summary = compute_period(ev, usage, start, end)
+    if request.args.get('download'):
+        name = f"{site}_Starlink_Usage_per_User_{start:%Y%m%d}-{end:%Y%m%d}.xlsx"
+        return send_file(build_xlsx(rows, per_user, unmatched), as_attachment=True, download_name=name, mimetype=MIME)
+    return render_template('period.html', site=site, start=start, end=end, rows=rows, per_user=per_user,
+                           unmatched=unmatched, summary=summary)
 
 
 @app.route('/report')

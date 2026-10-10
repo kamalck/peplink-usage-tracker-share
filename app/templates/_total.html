@@ -1,0 +1,34 @@
+<div class="stats">
+  <div class="stat"><b>{{ summary.devices }}</b><span>devices in usage report</span></div>
+  <div class="stat"><b>{{ summary.matched }}</b><span>matched to a user</span></div>
+  <div class="stat"><b>{{ summary.unmatched }}</b><span>unmatched</span></div>
+  <div class="stat"><b>{{ summary.users }}</b><span>distinct users</span></div>
+  <div class="stat"><b>{{ summary.total_gb }}</b><span>GB total</span></div>
+  {% if summary.non_mac %}<div class="stat"><b>{{ summary.non_mac }}</b><span>IP-only rows (no MAC)</span></div>{% endif %}
+</div>
+<div class="card">
+  <div class="tabs">
+    <a class="active" data-t="t1">By device</a><a data-t="t2">By user</a><a data-t="t3">Unmatched ({{ unmatched|length }})</a>
+  </div>
+  <div class="tools"><input id="q" placeholder="Filter (user, MAC, device)…"><small>click a header to sort</small></div>
+
+  <div id="t1" class="panel active"><div class="wrap"><table>
+    <thead><tr><th>User ID</th><th>MAC</th><th>Device</th><th class="num">Upload MB</th><th class="num">Download MB</th><th class="num">Total MB</th><th class="num">GB</th><th class="num">%</th><th class="num">Logins</th><th>All users seen</th><th>Last login</th><th>Time</th></tr></thead>
+    <tbody>{% for r in rows %}<tr class="{{ '' if r.user else 'unm' }}">
+      <td>{{ r.user or '— no login —' }}</td><td>{{ r.mac }}</td><td>{{ r.name }}</td>
+      <td class="num">{{ '{:,.2f}'.format(r.up) }}</td><td class="num">{{ '{:,.2f}'.format(r.down) }}</td>
+      <td class="num">{{ '{:,.2f}'.format(r.tot) }}</td><td class="num">{{ r.gb }}</td><td class="num">{{ r.pct }}</td><td class="num">{{ r.logins }}</td>
+      <td>{{ r.users }}</td><td>{{ r.last_user }}</td><td>{{ r.last_time }}</td></tr>{% endfor %}</tbody>
+  </table></div></div>
+
+  <div id="t2" class="panel"><div class="wrap"><table>
+    <thead><tr><th>User ID</th><th class="num">Devices</th><th>MACs</th><th class="num">Total MB</th><th class="num">GB</th></tr></thead>
+    <tbody>{% for u,p in per_user.items() %}<tr><td>{{ u }}</td><td class="num">{{ p.macs|length }}</td><td>{{ p.macs|join(', ') }}</td>
+      <td class="num">{{ '{:,.2f}'.format(p.tot) }}</td><td class="num">{{ '{:,.2f}'.format(p.tot/1024) }}</td></tr>{% endfor %}</tbody>
+  </table></div></div>
+
+  <div id="t3" class="panel"><div class="wrap"><table>
+    <thead><tr><th>MAC</th><th>Device</th><th class="num">Total MB</th><th>Note</th></tr></thead>
+    <tbody>{% for r in unmatched %}<tr><td>{{ r.mac }}</td><td>{{ r.name }}</td><td class="num">{{ '{:,.2f}'.format(r.tot) }}</td><td>{{ '' if r.is_mac else 'Not a MAC (IP / non-portal traffic)' }}</td></tr>{% endfor %}</tbody>
+  </table></div></div>
+</div>

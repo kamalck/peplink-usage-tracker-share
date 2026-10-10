@@ -15,7 +15,9 @@ with a **per-device usage report** (.csv, "usage per MAC") and produces one list
 - Works with any site export (SITE1, other sites) — column names are matched case-insensitively
 - CLI mode for scripting/batch use
 - Also accepts the portal's *Top client usage* export (`% Usage` column carried through); rows keyed by IP instead of MAC are listed under Unmatched with a note
-- **Login required**: user name and password come from the host's `.env` (never from the repo). With no `ADMIN_PASSWORD` set the app stays locked (503) instead of open. CSRF-protected forms, 5 failed sign-ins lock that address out for 5 minutes, sessions last 12 hours. `/health` stays open for the container healthcheck.
+- **7-day and daily uploads**: the Import page takes daily usage CSVs (one day each) and 7-day/period CSVs (one export for a whole period; dates from the file name or a start-date field). Period files are stored separately and shown as per-user period totals (with Excel download).
+- **Delete data**: Import page → *Delete data* removes daily usage, period usage, logins, or everything for a site, optionally limited to a date range (everything needs the site name typed).
+- **Login required** (one or more accounts): user name and password come from the host's `.env` (never from the repo). With no `ADMIN_PASSWORD` set the app stays locked (503) instead of open. CSRF-protected forms, 5 failed sign-ins lock that address out for 5 minutes, sessions last 12 hours. `/health` stays open for the container healthcheck.
 - The *Quick merge* page stores nothing (files are processed in memory); the *Import* / *Report* pages keep their data in SQLite (see Data)
 
 ## Configuration (`.env`)
@@ -25,6 +27,7 @@ Secrets and site-specific values live in an untracked `.env` next to `docker-com
 |---|---|
 | `ADMIN_USERNAME` | sign-in user name (default `admin`) |
 | `ADMIN_PASSWORD` | sign-in password — **required**; the app is locked while empty |
+| `ADMIN_USERS` | optional extra accounts, `user:password;user2:password2` |
 | `SECRET_KEY` | signs the login cookie; if empty, one is generated into `data/.secret_key` |
 
 Create it once on the host:
@@ -60,6 +63,7 @@ python app/app.py report --site SITE1 --start 2026-10-03 --end 2026-10-09 -o SIT
 ```
 
 ## Changelog
+- **v1.4.0** (2026-10-10) — **Multiple logins** (`ADMIN_USERS` in `.env`, signed-in name shown next to Sign out); **7-day/period usage upload** alongside daily files (new `usage_period` table, created automatically; period totals page + Excel); **Delete data** (daily usage, periods, logins or everything for a site, optional date range). `docker-compose.yml` changed: passes `ADMIN_USERS`. ONE-TIME STEP: optionally add `ADMIN_USERS=alice:pw1;bob:pw2` to `.env`; nothing else needed.
 - **v1.3.0** (2026-10-10) — **Login** (user name/password from `.env`, CSRF on all forms, brute-force lockout, locked page while unconfigured); secrets moved out of `docker-compose.yml` into `.env` (`SECRET_KEY`, `ADMIN_USERNAME`, `ADMIN_PASSWORD`) with `.env.example`; **app icon** (favicon + header + login page); gunicorn instead of Flask's dev server; compose healthcheck + log rotation; `.dockerignore`. Fixes: a bad date in `/report` no longer returns a 500; file type is decided by extension only (a CSV with "event" in its name was read as an event log); database connections are always closed. ONE-TIME STEP: create `.env` (see Configuration) before updating, or the app shows the "locked" page.
 - **v1.2.1** (2026-10-10) — Renamed to *Peplink Usage Tracker* (DB file `data/peplink.db`, container `peplink-usage-tracker`); moved into its own git repo.
 - **v1.2.0** (2026-10-09) — Ongoing tracking: SQLite store, Import page (dedup overlapping event logs, per-day usage upsert, multi-site), Report page with date range + Excel, CLI `import`/`report`; layout with nav; one-off merge moved to /quick.

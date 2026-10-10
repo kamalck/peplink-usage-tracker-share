@@ -1,5 +1,6 @@
 {% extends "layout.html" %}{% set nav="import" %}{% block subtitle %}ongoing tracking — import exports as you get them{% endblock %}{% block content %}
 <form class="card" method="post" enctype="multipart/form-data" action="{{ url_for('do_import') }}">
+  <input type="hidden" name="_csrf" value="{{ csrf_token() }}">
   <div class="row">
     <div><label>Site</label><input type="text" name="site" value="{{ site }}" placeholder="auto from file name (e.g. SITE1)" list="sites"><datalist id="sites">{% for s in sites %}<option value="{{ s }}">{% endfor %}</datalist></div>
     <div style="flex:1"><label>Files — event logs (.xlsx) and daily usage exports (.csv), any number, any order</label><input type="file" name="files" multiple required></div>

@@ -4,6 +4,8 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>{% block title %}Peplink Usage Tracker{% endblock %}</title>
+<link rel="icon" type="image/svg+xml" href="{{ url_for('static', filename='favicon.svg') }}">
+<meta name="theme-color" content="#1F4E78">
 <style>
   :root{--bg:#f4f6f9;--card:#fff;--ink:#1c2430;--muted:#6b7686;--line:#dde3ea;--accent:#1F4E78;--accent2:#2e7bbf;--warn:#b7791f}
   *{box-sizing:border-box}
@@ -56,8 +58,9 @@
 </style>
 </head>
 <body>
-<header><h1>Peplink Usage Tracker</h1><span>{% block subtitle %}{% endblock %}</span>
-<nav><a href="{{ url_for('home') }}" class="{{ 'active' if nav=='import' }}">Import</a><a href="{{ url_for('report') }}" class="{{ 'active' if nav=='report' }}">Report</a><a href="{{ url_for('quick') }}" class="{{ 'active' if nav=='quick' }}">Quick merge</a></nav></header>
+<header><img src="{{ url_for('static', filename='favicon.svg') }}" alt="" width="30" height="30"><h1>Peplink Usage Tracker</h1><span>{% block subtitle %}{% endblock %}</span>
+{% if session.get('auth') %}<nav><a href="{{ url_for('home') }}" class="{{ 'active' if nav=='import' }}">Import</a><a href="{{ url_for('report') }}" class="{{ 'active' if nav=='report' }}">Report</a><a href="{{ url_for('quick') }}" class="{{ 'active' if nav=='quick' }}">Quick merge</a>
+<form method="post" action="{{ url_for('logout') }}" style="margin:0"><input type="hidden" name="_csrf" value="{{ csrf_token() }}"><button style="background:transparent;border:0;color:#fff;opacity:.8;padding:6px 12px;font-weight:400">Sign out</button></form></nav>{% endif %}</header>
 <main>
 {% with msgs = get_flashed_messages() %}{% if msgs %}<ul class="msgs">{% for m in msgs %}<li class="{{ 'err' if 'ERROR' in m or 'skipped' in m or 'No ' in m }}">{{ m }}</li>{% endfor %}</ul>{% endif %}{% endwith %}
 {% block content %}{% endblock %}

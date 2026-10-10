@@ -1,14 +1,134 @@
-import os, sys, argparse
-from datetime import datetime, date
-from flask import Flask, render_template, request, send_file, flash, redirect, url_for
+import os, sys, argparse, hmac, secrets, time
+from datetime import datetime, date, timedelta
+from flask import Flask, render_template, request, send_file, flash, redirect, url_for, session
 from merge import merge, build_xlsx
 from daily import merge_daily, build_daily_xlsx, compute
 import store
 
+VERSION = '1.3.0'
+
+
+def _secret_key():
+    """SECRET_KEY from .env; if it is empty, make one and keep it in data/ (git-ignored) so logins survive a restart."""
+    k = os.environ.get('SECRET_KEY', '').strip()
+    if k:
+        return k
+    path = os.path.join(os.path.dirname(store.DB_PATH), '.secret_key')
+    try:
+        os.makedirs(os.path.dirname(path), exist_ok=True)
+        if os.path.exists(path):
+            k = open(path, encoding='ascii').read().strip()
+            if k:
+                return k
+        k = secrets.token_hex(32)
+        fd = os.open(path, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
+        with os.fdopen(fd, 'w', encoding='ascii') as f:
+            f.write(k)
+        return k
+    except OSError:
+        return secrets.token_hex(32)
+
+
 app = Flask(__name__)
-app.secret_key = os.environ.get('SECRET_KEY', 'peplink-usage-tracker-local')
+app.secret_key = _secret_key()
 app.config['MAX_CONTENT_LENGTH'] = 256 * 1024 * 1024
+app.config.update(SESSION_COOKIE_HTTPONLY=True, SESSION_COOKIE_SAMESITE='Lax',
+                  PERMANENT_SESSION_LIFETIME=timedelta(hours=12))
 MIME = 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+
+# Login comes from the environment (.env on the host) - nothing secret is ever in the repo.
+ADMIN_USERNAME = os.environ.get('ADMIN_USERNAME', 'admin').strip() or 'admin'
+ADMIN_PASSWORD = os.environ.get('ADMIN_PASSWORD', '')
+OPEN_ENDPOINTS = {'health', 'login', 'static'}
+_fails = {}          # remote addr -> [failures, window start, blocked until]
+MAX_FAILS, FAIL_WINDOW, BLOCK_SECONDS = 5, 600, 300
+
+
+def _same(a, b):
+    return hmac.compare_digest((a or '').encode('utf-8'), (b or '').encode('utf-8'))
+
+
+def _csrf_token():
+    if 'csrf' not in session:
+        session['csrf'] = secrets.token_hex(16)
+    return session['csrf']
+
+
+app.jinja_env.globals['csrf_token'] = _csrf_token
+app.jinja_env.globals['app_version'] = VERSION
+
+
+@app.before_request
+def gate():
+    """Everything except /health, /login and static files needs the admin login. No password set = locked, not open."""
+    if request.endpoint in OPEN_ENDPOINTS:
+        return None
+    if not ADMIN_PASSWORD:
+        return render_template('locked.html'), 503
+    if not session.get('auth'):
+        nxt = request.full_path.rstrip('?') if request.method == 'GET' else ''
+        return redirect(url_for('login', next=nxt))
+    if request.method == 'POST' and not _same(request.form.get('_csrf'), session.get('csrf')):
+        flash('ERROR: session expired - please try again.')
+        return redirect(url_for('home'))
+    return None
+
+
+def _safe_next(n):
+    ok = n and n.startswith('/') and not n.startswith('//') and '\\' not in n
+    return n if ok else url_for('home')
+
+
+@app.route('/login', methods=['GET', 'POST'])
+def login():
+    if not ADMIN_PASSWORD:
+        return render_template('locked.html'), 503
+    nxt = request.values.get('next', '')
+    if request.method == 'POST':
+        ip = request.remote_addr or '?'
+        now = time.time()
+        rec = _fails.get(ip)
+        if rec and rec[2] > now:
+            flash('ERROR: too many attempts - try again in %d min.' % (int(rec[2] - now) // 60 + 1))
+            return render_template('login.html', next=nxt), 429
+        if not _same(request.form.get('_csrf'), session.get('csrf')):
+            flash('ERROR: session expired - please try again.')
+            return render_template('login.html', next=nxt)
+        ok_user = _same(request.form.get('username', '').strip(), ADMIN_USERNAME)
+        ok_pass = _same(request.form.get('password', ''), ADMIN_PASSWORD)
+        if ok_user and ok_pass:
+            _fails.pop(ip, None)
+            session.clear()
+            session['auth'] = True
+            session.permanent = True
+            return redirect(_safe_next(nxt))
+        rec = _fails.get(ip)
+        if not rec or now - rec[1] > FAIL_WINDOW:
+            rec = [0, now, 0]
+        rec[0] += 1
+        if rec[0] >= MAX_FAILS:
+            rec[2] = now + BLOCK_SECONDS
+            rec[0], rec[1] = 0, now
+        _fails[ip] = rec
+        flash('ERROR: wrong user name or password.')
+    return render_template('login.html', next=nxt)
+
+
+@app.route('/logout', methods=['POST'])
+def logout():
+    session.clear()
+    return redirect(url_for('login'))
+
+
+def _day_arg(name, default):
+    """A YYYY-MM-DD query value, or the default when missing/garbled (a hand-edited URL must not 500)."""
+    v = request.args.get(name)
+    if v:
+        try:
+            return date.fromisoformat(v).isoformat()
+        except ValueError:
+            flash('ERROR: "%s" is not a date (use YYYY-MM-DD) - showing the default range.' % v)
+    return default
 
 
 def _site_arg():
@@ -40,12 +160,15 @@ def do_import():
             continue
         try:
             low = f.filename.lower()
-            if low.endswith('.xlsx') or 'event' in low:
+            if low.endswith('.xlsx'):
                 r = store.import_events(fsite, f.filename, f.stream)
                 msgs.append(f'{f.filename}: {r["rows"]} logins read, {r["added"]} new ({r["first"]} → {r["last"]})')
-            else:
+            elif low.endswith('.csv'):
                 r = store.import_usage(fsite, f.filename, f.stream)
                 msgs.append(f'{f.filename}: {r["rows"]} devices stored for {r["day"]}')
+            else:
+                msgs.append(f'{f.filename}: ERROR unsupported file type (event log = .xlsx, usage = .csv)')
+                continue
             site = site or fsite
         except Exception as e:
             msgs.append(f'{f.filename}: ERROR {e}')
@@ -61,8 +184,8 @@ def report():
     if not st or not st['days']:
         flash('No usage data imported yet for this site.')
         return redirect(url_for('home', site=site))
-    start = request.args.get('start') or st['days'][max(0, len(st['days']) - 7)]
-    end = request.args.get('end') or st['days'][-1]
+    start = _day_arg('start', st['days'][max(0, len(st['days']) - 7)])
+    end = _day_arg('end', st['days'][-1])
     ev, byday = store.load_for_report(site, date.fromisoformat(start), date.fromisoformat(end))
     if not byday:
         flash('No usage data in that range.')
@@ -104,7 +227,7 @@ def quick():
 
 @app.route('/health')
 def health():
-    return {'status': 'ok'}
+    return {'status': 'ok', 'version': VERSION}
 
 
 # ---------- CLI ----------

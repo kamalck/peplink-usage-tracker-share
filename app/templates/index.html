@@ -1,5 +1,6 @@
 {% extends "layout.html" %}{% set nav="quick" %}{% block subtitle %}one-off merge, nothing stored{% endblock %}{% block content %}
 <form class="card" method="post" enctype="multipart/form-data" action="{{ url_for('quick') }}">
+  <input type="hidden" name="_csrf" value="{{ csrf_token() }}">
   <div class="grid">
     <div>
       <label>Starlink event log (.xlsx)</label>

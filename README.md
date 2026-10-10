@@ -15,7 +15,24 @@ with a **per-device usage report** (.csv, "usage per MAC") and produces one list
 - Works with any site export (SITE1, other sites) — column names are matched case-insensitively
 - CLI mode for scripting/batch use
 - Also accepts the portal's *Top client usage* export (`% Usage` column carried through); rows keyed by IP instead of MAC are listed under Unmatched with a note
-- No data is stored; files are processed in memory
+- **Login required**: user name and password come from the host's `.env` (never from the repo). With no `ADMIN_PASSWORD` set the app stays locked (503) instead of open. CSRF-protected forms, 5 failed sign-ins lock that address out for 5 minutes, sessions last 12 hours. `/health` stays open for the container healthcheck.
+- The *Quick merge* page stores nothing (files are processed in memory); the *Import* / *Report* pages keep their data in SQLite (see Data)
+
+## Configuration (`.env`)
+Secrets and site-specific values live in an untracked `.env` next to `docker-compose.yml`; `.env.example` (tracked) documents them. `docker-compose.yml` reads them as `${VAR:-default}`, so nothing sensitive is in the repo and sharing the code shares no credentials.
+
+| Variable | Purpose |
+|---|---|
+| `ADMIN_USERNAME` | sign-in user name (default `admin`) |
+| `ADMIN_PASSWORD` | sign-in password — **required**; the app is locked while empty |
+| `SECRET_KEY` | signs the login cookie; if empty, one is generated into `data/.secret_key` |
+
+Create it once on the host:
+```bash
+cd peplink-usage-tracker
+printf 'ADMIN_USERNAME=admin\nADMIN_PASSWORD=%s\nSECRET_KEY=%s\n' "$(openssl rand -base64 18 | tr -d '/+=')" "$(openssl rand -hex 32)" > .env
+chmod 600 .env && cat .env        # note the generated password, then: docker compose up -d
+```
 
 ## Data
 `data/peplink.db` holds everything imported. The compose file mounts `./data` so it survives rebuilds; back it up like any other SQLite database.
@@ -31,7 +48,7 @@ Open `http://<your-host>:5020`. To update after pulling new code, run `docker co
 ## Run locally without Docker
 ```bash
 pip install -r app/requirements.txt
-python app/app.py                 # http://localhost:5020
+ADMIN_PASSWORD=test python app/app.py     # http://localhost:5020  (Windows PowerShell: $env:ADMIN_PASSWORD='test'; python app/app.py)
 ```
 
 ## CLI
@@ -43,6 +60,7 @@ python app/app.py report --site SITE1 --start 2026-10-03 --end 2026-10-09 -o SIT
 ```
 
 ## Changelog
+- **v1.3.0** (2026-10-10) — **Login** (user name/password from `.env`, CSRF on all forms, brute-force lockout, locked page while unconfigured); secrets moved out of `docker-compose.yml` into `.env` (`SECRET_KEY`, `ADMIN_USERNAME`, `ADMIN_PASSWORD`) with `.env.example`; **app icon** (favicon + header + login page); gunicorn instead of Flask's dev server; compose healthcheck + log rotation; `.dockerignore`. Fixes: a bad date in `/report` no longer returns a 500; file type is decided by extension only (a CSV with "event" in its name was read as an event log); database connections are always closed. ONE-TIME STEP: create `.env` (see Configuration) before updating, or the app shows the "locked" page.
 - **v1.2.1** (2026-10-10) — Renamed to *Peplink Usage Tracker* (DB file `data/peplink.db`, container `peplink-usage-tracker`); moved into its own git repo.
 - **v1.2.0** (2026-10-09) — Ongoing tracking: SQLite store, Import page (dedup overlapping event logs, per-day usage upsert, multi-site), Report page with date range + Excel, CLI `import`/`report`; layout with nav; one-off merge moved to /quick.
 - **v1.1.1** (2026-10-09) — Per-day mode: *Inferred from next login* fallback for days before the event log starts; count shown in summary.

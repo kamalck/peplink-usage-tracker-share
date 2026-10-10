@@ -1,0 +1,11 @@
+{% extends "layout.html" %}{% block subtitle %}not configured{% endblock %}{% block content %}
+<div class="card" style="max-width:640px;margin:60px auto">
+  <b>Login is not configured.</b>
+  <p>For safety the app stays locked until an admin password is set. On the server, add this to the <code>.env</code> file next to
+  <code>docker-compose.yml</code> and restart the container:</p>
+  <pre style="background:#eef2f7;padding:10px;border-radius:6px">ADMIN_USERNAME=admin
+ADMIN_PASSWORD=choose-a-long-password
+SECRET_KEY=a-long-random-string</pre>
+  <p class="muted">docker compose up -d</p>
+</div>
+{% endblock %}

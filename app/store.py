@@ -1,5 +1,6 @@
 """SQLite store for ongoing Starlink usage tracking (multiple sites, overlapping log exports)."""
 import os, re, sqlite3, collections
+from contextlib import contextmanager
 from datetime import datetime, date
 from merge import parse_usage
 from daily import parse_events_by_day, date_from_name
@@ -26,25 +27,39 @@ def site_from_name(name):
     return m.group(1).upper() if m else ''
 
 
+_ready = False
+
+
+@contextmanager
 def connect():
+    """Open the database; commit on success, roll back on error, ALWAYS close (sqlite3's own `with` never closes)."""
+    global _ready
     os.makedirs(os.path.dirname(DB_PATH), exist_ok=True)
-    con = sqlite3.connect(DB_PATH)
-    con.executescript(SCHEMA)
-    return con
+    con = sqlite3.connect(DB_PATH, timeout=30)
+    try:
+        if not _ready:
+            con.executescript(SCHEMA)
+            _ready = True
+        yield con
+        con.commit()
+    except Exception:
+        con.rollback()
+        raise
+    finally:
+        con.close()
 
 
 def import_events(site, filename, fileobj):
     ev = parse_events_by_day(fileobj)
     rows = [(site, dt.isoformat(sep=' '), mac, user) for mac, lst in ev.items() for dt, user in lst]
-    con = connect()
-    before = con.execute('SELECT COUNT(*) FROM logins WHERE site=?', (site,)).fetchone()[0]
-    con.executemany('INSERT OR IGNORE INTO logins VALUES (?,?,?,?)', rows)
-    after = con.execute('SELECT COUNT(*) FROM logins WHERE site=?', (site,)).fetchone()[0]
     ts = sorted(r[1] for r in rows)
-    con.execute('INSERT INTO imports (imported_at, site, kind, filename, rows, added, first_ts, last_ts) VALUES (?,?,?,?,?,?,?,?)',
-                (datetime.now().isoformat(sep=' ', timespec='seconds'), site, 'events', filename, len(rows), after - before,
-                 ts[0] if ts else None, ts[-1] if ts else None))
-    con.commit(); con.close()
+    with connect() as con:
+        before = con.execute('SELECT COUNT(*) FROM logins WHERE site=?', (site,)).fetchone()[0]
+        con.executemany('INSERT OR IGNORE INTO logins VALUES (?,?,?,?)', rows)
+        after = con.execute('SELECT COUNT(*) FROM logins WHERE site=?', (site,)).fetchone()[0]
+        con.execute('INSERT INTO imports (imported_at, site, kind, filename, rows, added, first_ts, last_ts) VALUES (?,?,?,?,?,?,?,?)',
+                    (datetime.now().isoformat(sep=' ', timespec='seconds'), site, 'events', filename, len(rows), after - before,
+                     ts[0] if ts else None, ts[-1] if ts else None))
     return {'rows': len(rows), 'added': after - before, 'first': ts[0] if ts else '', 'last': ts[-1] if ts else ''}
 
 
@@ -53,30 +68,26 @@ def import_usage(site, filename, fileobj, day=None):
     if not day:
         raise ValueError(f'No date (YYYY-MM-DD) in file name: {filename}')
     usage = parse_usage(fileobj)
-    con = connect()
-    con.execute('DELETE FROM usage_daily WHERE site=? AND day=?', (site, day.isoformat()))
-    con.executemany('INSERT INTO usage_daily VALUES (?,?,?,?,?,?,?,?)',
-                    [(site, day.isoformat(), mac, u['name'], u['up'], u['down'], u['tot'], int(u['is_mac'])) for mac, u in usage.items()])
-    con.execute('INSERT INTO imports (imported_at, site, kind, filename, rows, added, first_ts, last_ts) VALUES (?,?,?,?,?,?,?,?)',
-                (datetime.now().isoformat(sep=' ', timespec='seconds'), site, 'usage', filename, len(usage), len(usage),
-                 day.isoformat(), day.isoformat()))
-    con.commit(); con.close()
+    with connect() as con:
+        con.execute('DELETE FROM usage_daily WHERE site=? AND day=?', (site, day.isoformat()))
+        con.executemany('INSERT INTO usage_daily VALUES (?,?,?,?,?,?,?,?)',
+                        [(site, day.isoformat(), mac, u['name'], u['up'], u['down'], u['tot'], int(u['is_mac'])) for mac, u in usage.items()])
+        con.execute('INSERT INTO imports (imported_at, site, kind, filename, rows, added, first_ts, last_ts) VALUES (?,?,?,?,?,?,?,?)',
+                    (datetime.now().isoformat(sep=' ', timespec='seconds'), site, 'usage', filename, len(usage), len(usage),
+                     day.isoformat(), day.isoformat()))
     return {'rows': len(usage), 'day': day}
 
 
 def sites():
-    con = connect()
-    s = sorted({r[0] for r in con.execute('SELECT DISTINCT site FROM usage_daily UNION SELECT DISTINCT site FROM logins')})
-    con.close()
-    return s
+    with connect() as con:
+        return sorted({r[0] for r in con.execute('SELECT DISTINCT site FROM usage_daily UNION SELECT DISTINCT site FROM logins')})
 
 
 def status(site):
-    con = connect()
-    days = [r[0] for r in con.execute('SELECT DISTINCT day FROM usage_daily WHERE site=? ORDER BY day', (site,))]
-    lg = con.execute('SELECT COUNT(*), MIN(ts), MAX(ts) FROM logins WHERE site=?', (site,)).fetchone()
-    imports = con.execute('SELECT imported_at, kind, filename, rows, added, first_ts, last_ts FROM imports WHERE site=? ORDER BY id DESC LIMIT 30', (site,)).fetchall()
-    con.close()
+    with connect() as con:
+        days = [r[0] for r in con.execute('SELECT DISTINCT day FROM usage_daily WHERE site=? ORDER BY day', (site,))]
+        lg = con.execute('SELECT COUNT(*), MIN(ts), MAX(ts) FROM logins WHERE site=?', (site,)).fetchone()
+        imports = con.execute('SELECT imported_at, kind, filename, rows, added, first_ts, last_ts FROM imports WHERE site=? ORDER BY id DESC LIMIT 30', (site,)).fetchall()
     # gaps in daily coverage
     gaps = []
     if days:
@@ -92,15 +103,14 @@ def status(site):
 
 def load_for_report(site, start, end):
     """Return (ev dict mac->[(dt,user)], usage_by_day list of (day, {mac: {...}}))."""
-    con = connect()
     ev = collections.defaultdict(list)
-    for ts, mac, user in con.execute('SELECT ts, mac, user FROM logins WHERE site=? ORDER BY ts', (site,)):
-        ev[mac].append((datetime.fromisoformat(ts), user))
     byday = collections.OrderedDict()
-    for day, mac, name, up, down, tot, is_mac in con.execute(
-            'SELECT day, mac, name, up, down, tot, is_mac FROM usage_daily WHERE site=? AND day BETWEEN ? AND ? ORDER BY day',
-            (site, start.isoformat(), end.isoformat())):
-        byday.setdefault(date.fromisoformat(day), collections.OrderedDict())[mac] = {
-            'name': name, 'up': up, 'down': down, 'tot': tot, 'is_mac': bool(is_mac)}
-    con.close()
+    with connect() as con:
+        for ts, mac, user in con.execute('SELECT ts, mac, user FROM logins WHERE site=? ORDER BY ts', (site,)):
+            ev[mac].append((datetime.fromisoformat(ts), user))
+        for day, mac, name, up, down, tot, is_mac in con.execute(
+                'SELECT day, mac, name, up, down, tot, is_mac FROM usage_daily WHERE site=? AND day BETWEEN ? AND ? ORDER BY day',
+                (site, start.isoformat(), end.isoformat())):
+            byday.setdefault(date.fromisoformat(day), collections.OrderedDict())[mac] = {
+                'name': name, 'up': up, 'down': down, 'tot': tot, 'is_mac': bool(is_mac)}
     return ev, list(byday.items())

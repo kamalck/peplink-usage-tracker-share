@@ -1,0 +1,12 @@
+{% extends "layout.html" %}{% block subtitle %}sign in{% endblock %}{% block content %}
+<form class="card" method="post" action="{{ url_for('login') }}" style="max-width:380px;margin:60px auto">
+  <div style="text-align:center;margin-bottom:14px"><img src="{{ url_for('static', filename='favicon.svg') }}" alt="" width="56" height="56"></div>
+  <input type="hidden" name="_csrf" value="{{ csrf_token() }}">
+  <input type="hidden" name="next" value="{{ next }}">
+  <label for="u">User name</label>
+  <input id="u" type="text" name="username" autocomplete="username" autofocus required style="width:100%;margin-bottom:14px">
+  <label for="p">Password</label>
+  <input id="p" type="password" name="password" autocomplete="current-password" required style="width:100%;margin-bottom:18px;padding:8px 10px;border:1px solid var(--line);border-radius:6px;font:inherit">
+  <button style="width:100%">Sign in</button>
+</form>
+{% endblock %}

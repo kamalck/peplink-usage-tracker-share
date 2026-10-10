@@ -147,6 +147,21 @@ def sites():
             'SELECT DISTINCT site FROM usage_daily UNION SELECT DISTINCT site FROM logins UNION SELECT DISTINCT site FROM usage_period')})
 
 
+def sites_overview():
+    """One row per site, newest activity first: the last entry added (import) plus what the site holds."""
+    out = []
+    with connect() as con:
+        for site in sites():
+            last = con.execute('SELECT imported_at, kind, filename, rows, first_ts, last_ts FROM imports WHERE site=? ORDER BY id DESC LIMIT 1', (site,)).fetchone()
+            day = con.execute('SELECT MAX(day), COUNT(DISTINCT day) FROM usage_daily WHERE site=?', (site,)).fetchone()
+            lg = con.execute('SELECT MAX(ts) FROM logins WHERE site=?', (site,)).fetchone()
+            out.append({'site': site, 'at': last[0] if last else '', 'kind': last[1] if last else '', 'file': last[2] if last else '',
+                        'rows': last[3] if last else 0, 'span': (f'{last[4]} → {last[5]}' if last and last[4] != last[5] else (last[4] if last else '')) or '',
+                        'last_day': day[0] or '', 'days': day[1], 'last_login': (lg[0] or '')[:16]})
+    out.sort(key=lambda r: r['at'], reverse=True)
+    return out
+
+
 def status(site):
     with connect() as con:
         days = [r[0] for r in con.execute('SELECT DISTINCT day FROM usage_daily WHERE site=? ORDER BY day', (site,))]

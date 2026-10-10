@@ -1,0 +1,33 @@
+{% if st %}
+<div class="stats">
+  <div class="stat"><b>{{ site }}</b><span>site</span></div>
+  <div class="stat"><b>{{ st.days|length }}</b><span>days of usage {% if st.days %}({{ st.days[0] }} → {{ st.days[-1] }}){% endif %}</span></div>
+  <div class="stat"><b>{{ st.gaps|length }}</b><span>missing days in range</span></div>
+  <div class="stat"><b>{{ '{:,}'.format(st.logins) }}</b><span>logins stored</span></div>
+  <div class="stat"><b style="font-size:14px">{{ st.log_first[:16] }}<br>{{ st.log_last[:16] }}</b><span>event log coverage</span></div>
+</div>
+<div class="card">
+  <b>Days loaded:</b> {% for d in st.days %}<span class="badge">{{ d }}</span>{% endfor %}
+  {% if st.gaps %}<br><b>Missing:</b> {% for d in st.gaps %}<span class="badge gap">{{ d }}</span>{% endfor %}{% endif %}
+  <div style="margin-top:14px"><a href="{{ url_for('report', site=site) }}"><button type="button">Open report →</button></a></div>
+</div>
+{% if st.periods %}<div class="card"><b>7-day / period files:</b>
+{% for p in st.periods %}<a href="{{ url_for('period', site=site, start=p[0], end=p[1]) }}" class="badge">{{ p[0] }} → {{ p[1] }} ({{ p[2] }} devices, {{ '{:,.1f}'.format(p[3]/1024) }} GB)</a>{% endfor %}</div>{% endif %}
+<form class="card" method="post" action="{{ url_for('do_delete') }}" onsubmit="return confirm('Delete the selected data for ' + this.site.value + '? This cannot be undone.')">
+  <input type="hidden" name="_csrf" value="{{ csrf_token() }}"><input type="hidden" name="site" value="{{ site }}">
+  <b>Delete data for {{ site }}</b>
+  <div class="row" style="margin-top:8px">
+    <div><label>What</label><select name="what"><option value="usage">Daily usage</option><option value="periods">7-day / period usage</option><option value="logins">Event-log logins</option><option value="all">Everything for this site</option></select></div>
+    <div><label>From (optional)</label><input type="date" name="start"></div>
+    <div><label>To (optional)</label><input type="date" name="end"></div>
+    <div><label>Everything: type site name</label><input type="text" name="confirm" placeholder="{{ site }}" autocomplete="off"></div>
+    <button style="background:#b3261e;border-color:#b3261e">Delete</button>
+  </div>
+  <small>Blank dates = no limit. Periods are matched when they overlap the range. “Everything” ignores the dates, also clears the import history, and needs the site name typed.</small>
+</form>
+<div class="card"><b>Recent imports</b>
+<div class="wrap" style="max-height:40vh;margin-top:8px"><table><thead><tr><th>When</th><th>Kind</th><th>File</th><th class="num">Rows</th><th class="num">New</th><th>From</th><th>To</th></tr></thead>
+<tbody>{% for i in st.imports %}<tr><td>{{ i[0] }}</td><td>{{ i[1] }}</td><td>{{ i[2] }}</td><td class="num">{{ i[3] }}</td><td class="num">{{ i[4] }}</td><td>{{ i[5] }}</td><td>{{ i[6] }}</td></tr>{% endfor %}</tbody></table></div></div>
+{% else %}
+<div class="card muted">Nothing imported yet. Upload an event log and one or more daily usage exports to start.</div>
+{% endif %}

@@ -5,7 +5,7 @@ from merge import merge, build_xlsx
 from daily import merge_daily, build_daily_xlsx, compute, compute_period, dates_from_name
 import store
 
-VERSION = '1.4.1'
+VERSION = '1.5.0'
 
 
 def _secret_key():
@@ -159,7 +159,14 @@ def _site_arg():
 def home():
     site, all_sites = _site_arg()
     st = store.status(site) if site else None
-    return render_template('import.html', site=site, sites=all_sites, st=st)
+    return render_template('import.html', site=site, sites=all_sites, st=st, overview=store.sites_overview())
+
+
+@app.route('/site_panel')
+def site_panel():
+    """HTML fragment with one site's import status - the Import page swaps it in when a site is picked."""
+    site = (request.args.get('site') or '').strip().upper()
+    return render_template('_site_status.html', site=site, st=store.status(site) if site else None)
 
 
 @app.route('/import', methods=['POST'])

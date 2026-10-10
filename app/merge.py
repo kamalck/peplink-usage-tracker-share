@@ -63,7 +63,8 @@ def parse_usage(fileobj):
             if n in fields:
                 return fields[n]
         raise ValueError(f'Usage CSV missing column: {names[0]}')
-    c_name, c_mac = f('name'), f('mac address', 'mac')
+    c_name = next((fields[n] for n in ('name', 'hostname', 'host name') if n in fields), None)   # optional: blank when absent
+    c_mac = f('mac address', 'mac')
     c_up, c_down, c_tot = f('upload (mb)', 'upload'), f('download (mb)', 'download'), f('total (mb)', 'total')
     c_pct = fields.get('% usage')
     usage = collections.OrderedDict()
@@ -71,7 +72,7 @@ def parse_usage(fileobj):
         mac = (row.get(c_mac) or '').strip().upper().replace('-', ':')
         if not mac:
             continue
-        d = usage.setdefault(mac, {'name': (row.get(c_name) or '').strip(), 'up': 0.0, 'down': 0.0, 'tot': 0.0, 'pct': 0.0,
+        d = usage.setdefault(mac, {'name': ((row.get(c_name) if c_name else '') or '').strip(), 'up': 0.0, 'down': 0.0, 'tot': 0.0, 'pct': 0.0,
                                    'is_mac': bool(MAC_RE.match(mac))})
         d['up'] += float(row.get(c_up) or 0)
         d['down'] += float(row.get(c_down) or 0)

@@ -5,7 +5,7 @@ from merge import merge, build_xlsx
 from daily import merge_daily, build_daily_xlsx, compute, compute_period, dates_from_name
 import store
 
-VERSION = '1.5.0'
+VERSION = '1.5.1'
 
 
 def _secret_key():

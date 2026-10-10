@@ -1,0 +1,72 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>{% block title %}Peplink Usage Tracker{% endblock %}</title>
+<style>
+  :root{--bg:#f4f6f9;--card:#fff;--ink:#1c2430;--muted:#6b7686;--line:#dde3ea;--accent:#1F4E78;--accent2:#2e7bbf;--warn:#b7791f}
+  *{box-sizing:border-box}
+  body{margin:0;font:14px/1.45 system-ui,Segoe UI,Roboto,sans-serif;background:var(--bg);color:var(--ink)}
+  header{background:var(--accent);color:#fff;padding:14px 24px;display:flex;align-items:center;gap:12px}
+  header h1{margin:0;font-size:18px;font-weight:600}
+  header span{opacity:.75;font-size:13px}
+  main{max-width:1400px;margin:24px auto;padding:0 16px}
+  .card{background:var(--card);border:1px solid var(--line);border-radius:8px;padding:20px;margin-bottom:20px}
+  .grid{display:grid;grid-template-columns:1fr 1fr;gap:16px}
+  label{display:block;font-weight:600;margin-bottom:6px}
+  small{color:var(--muted)}
+  input[type=file]{width:100%;padding:10px;border:1px dashed var(--line);border-radius:6px;background:#fafbfc}
+  .actions{margin-top:16px;display:flex;gap:10px;flex-wrap:wrap}
+  button{padding:9px 18px;border-radius:6px;border:1px solid var(--accent);background:var(--accent);color:#fff;font-weight:600;cursor:pointer}
+  button.secondary{background:#fff;color:var(--accent)}
+  .flash{background:#fdecea;color:#8a1c1c;border:1px solid #f5c2c0;padding:10px 14px;border-radius:6px;margin-bottom:16px}
+  .stats{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:12px;margin-bottom:20px}
+  .stat{background:var(--card);border:1px solid var(--line);border-radius:8px;padding:14px}
+  .stat b{display:block;font-size:22px;color:var(--accent)}
+  .stat span{color:var(--muted);font-size:12px}
+  .tabs{display:flex;gap:4px;border-bottom:1px solid var(--line);margin-bottom:12px}
+  .tabs a{padding:8px 14px;text-decoration:none;color:var(--muted);border-bottom:2px solid transparent;cursor:pointer}
+  .tabs a.active{color:var(--accent);border-color:var(--accent);font-weight:600}
+  .panel{display:none}.panel.active{display:block}
+  .tools{display:flex;gap:10px;margin-bottom:10px;align-items:center}
+  .tools input{padding:7px 10px;border:1px solid var(--line);border-radius:6px;width:280px}
+  table{width:100%;border-collapse:collapse;font-size:13px}
+  th,td{padding:7px 9px;border-bottom:1px solid var(--line);text-align:left;white-space:nowrap}
+  th{background:#eef2f7;position:sticky;top:0;cursor:pointer;user-select:none}
+  td.num,th.num{text-align:right;font-variant-numeric:tabular-nums}
+  tr.unm td:first-child{color:var(--warn);font-style:italic}
+  .wrap{overflow:auto;max-height:70vh;border:1px solid var(--line);border-radius:6px}
+  code{background:#eef2f7;padding:1px 5px;border-radius:4px}
+</style>
+
+<style>
+  nav{display:flex;gap:4px;margin-left:auto}
+  nav a{color:#fff;text-decoration:none;padding:6px 12px;border-radius:6px;opacity:.8}
+  nav a.active,nav a:hover{background:rgba(255,255,255,.18);opacity:1}
+  .row{display:flex;gap:12px;align-items:end;flex-wrap:wrap}
+  .row label{margin:0}
+  input[type=text],input[type=date],select{padding:8px 10px;border:1px solid var(--line);border-radius:6px;font:inherit}
+  .muted{color:var(--muted)}
+  ul.msgs{margin:0 0 16px;padding:0;list-style:none}
+  ul.msgs li{background:#eef6ee;border:1px solid #cfe5cf;padding:8px 12px;border-radius:6px;margin-bottom:6px;font-size:13px}
+  ul.msgs li.err{background:#fdecea;border-color:#f5c2c0}
+  .badge{display:inline-block;background:#eef2f7;border-radius:4px;padding:2px 7px;font-size:12px;margin:2px}
+  .badge.gap{background:#fdecea;color:#8a1c1c}
+</style>
+</head>
+<body>
+<header><h1>Peplink Usage Tracker</h1><span>{% block subtitle %}{% endblock %}</span>
+<nav><a href="{{ url_for('home') }}" class="{{ 'active' if nav=='import' }}">Import</a><a href="{{ url_for('report') }}" class="{{ 'active' if nav=='report' }}">Report</a><a href="{{ url_for('quick') }}" class="{{ 'active' if nav=='quick' }}">Quick merge</a></nav></header>
+<main>
+{% with msgs = get_flashed_messages() %}{% if msgs %}<ul class="msgs">{% for m in msgs %}<li class="{{ 'err' if 'ERROR' in m or 'skipped' in m or 'No ' in m }}">{{ m }}</li>{% endfor %}</ul>{% endif %}{% endwith %}
+{% block content %}{% endblock %}
+</main>
+<script>
+document.querySelectorAll('.tabs a').forEach(a=>a.onclick=()=>{document.querySelectorAll('.tabs a,.panel').forEach(e=>e.classList.remove('active'));a.classList.add('active');document.getElementById(a.dataset.t).classList.add('active');});
+const q=document.getElementById('q'); if(q) q.oninput=e=>{const v=e.target.value.toLowerCase();document.querySelectorAll('.panel.active tbody tr').forEach(tr=>tr.style.display=tr.textContent.toLowerCase().includes(v)?'':'none');};
+document.querySelectorAll('th').forEach(th=>th.onclick=()=>{const t=th.closest('table'),i=[...th.parentNode.children].indexOf(th),num=th.classList.contains('num'),asc=th.dataset.asc!=='1';th.dataset.asc=asc?'1':'0';
+ const rows=[...t.tBodies[0].rows].sort((a,b)=>{let x=a.cells[i].textContent,y=b.cells[i].textContent;if(num){x=parseFloat(x.replace(/,/g,''))||0;y=parseFloat(y.replace(/,/g,''))||0;return asc?x-y:y-x}return asc?x.localeCompare(y):y.localeCompare(x)});rows.forEach(r=>t.tBodies[0].appendChild(r));});
+</script>
+</body>
+</html>

@@ -1,0 +1,29 @@
+{% extends "layout.html" %}{% set nav="import" %}{% block subtitle %}ongoing tracking — import exports as you get them{% endblock %}{% block content %}
+<form class="card" method="post" enctype="multipart/form-data" action="{{ url_for('do_import') }}">
+  <div class="row">
+    <div><label>Site</label><input type="text" name="site" value="{{ site }}" placeholder="auto from file name (e.g. SITE1)" list="sites"><datalist id="sites">{% for s in sites %}<option value="{{ s }}">{% endfor %}</datalist></div>
+    <div style="flex:1"><label>Files — event logs (.xlsx) and daily usage exports (.csv), any number, any order</label><input type="file" name="files" multiple required></div>
+    <button>Import</button>
+  </div>
+  <small>Event logs may overlap (the portal exports 10,000 rows at a time) — only new logins are added. A daily usage file replaces any earlier import for the same site and day. Site is read from the file name (<code>…_SITE1_-_Starlink_…</code>) unless you type one.</small>
+</form>
+{% if st %}
+<div class="stats">
+  <div class="stat"><b>{{ site }}</b><span>site</span></div>
+  <div class="stat"><b>{{ st.days|length }}</b><span>days of usage {% if st.days %}({{ st.days[0] }} → {{ st.days[-1] }}){% endif %}</span></div>
+  <div class="stat"><b>{{ st.gaps|length }}</b><span>missing days in range</span></div>
+  <div class="stat"><b>{{ '{:,}'.format(st.logins) }}</b><span>logins stored</span></div>
+  <div class="stat"><b style="font-size:14px">{{ st.log_first[:16] }}<br>{{ st.log_last[:16] }}</b><span>event log coverage</span></div>
+</div>
+<div class="card">
+  <b>Days loaded:</b> {% for d in st.days %}<span class="badge">{{ d }}</span>{% endfor %}
+  {% if st.gaps %}<br><b>Missing:</b> {% for d in st.gaps %}<span class="badge gap">{{ d }}</span>{% endfor %}{% endif %}
+  <div style="margin-top:14px"><a href="{{ url_for('report', site=site) }}"><button type="button">Open report →</button></a></div>
+</div>
+<div class="card"><b>Recent imports</b>
+<div class="wrap" style="max-height:40vh;margin-top:8px"><table><thead><tr><th>When</th><th>Kind</th><th>File</th><th class="num">Rows</th><th class="num">New</th><th>From</th><th>To</th></tr></thead>
+<tbody>{% for i in st.imports %}<tr><td>{{ i[0] }}</td><td>{{ i[1] }}</td><td>{{ i[2] }}</td><td class="num">{{ i[3] }}</td><td class="num">{{ i[4] }}</td><td>{{ i[5] }}</td><td>{{ i[6] }}</td></tr>{% endfor %}</tbody></table></div></div>
+{% else %}
+<div class="card muted">Nothing imported yet. Upload an event log and one or more daily usage exports to start.</div>
+{% endif %}
+{% endblock %}

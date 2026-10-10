@@ -1,0 +1,11 @@
+services:
+  peplink-usage-tracker:
+    build: .
+    container_name: peplink-usage-tracker
+    restart: unless-stopped
+    ports:
+      - "5020:5020"
+    volumes:
+      - ./data:/app/data
+    environment:
+      - SECRET_KEY=change-me

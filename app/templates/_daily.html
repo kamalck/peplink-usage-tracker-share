@@ -1,0 +1,24 @@
+<div class="stats">
+  <div class="stat"><b>{{ summary.days }}</b><span>days ({{ summary.first.strftime('%d %b') }} – {{ summary.last.strftime('%d %b') }})</span></div>
+  <div class="stat"><b>{{ summary.users }}</b><span>users</span></div>
+  <div class="stat"><b>{{ summary.matched }}/{{ summary.device_days }}</b><span>device-days matched</span></div>
+  <div class="stat"><b>{{ summary.carried }}</b><span>carried from earlier login</span></div>
+  {% if summary.inferred %}<div class="stat"><b>{{ summary.inferred }}</b><span>inferred from next login</span></div>{% endif %}
+  <div class="stat"><b>{{ summary.total_gb }}</b><span>GB total</span></div>
+  <div class="stat"><b>{{ summary.unmatched_gb }}</b><span>GB unmatched</span></div>
+</div>
+<div class="card">
+  <div class="tabs"><a class="active" data-t="t1">Per user per day</a><a data-t="t2">Device-day detail</a></div>
+  <div class="tools"><input id="q" placeholder="Filter…"><small>click a header to sort</small></div>
+  <div id="t1" class="panel active"><div class="wrap"><table>
+    <thead><tr><th>User ID</th>{% for d in days %}<th class="num">{{ d.strftime('%d %b') }}</th>{% endfor %}<th class="num">Total MB</th><th class="num">GB</th><th class="num">Days</th><th class="num">Devices</th><th>MACs</th></tr></thead>
+    <tbody>{% for r in pivot %}<tr><td>{{ r.user }}</td>{% for d in days %}<td class="num">{{ '{:,.0f}'.format(r.per[d]) if r.per[d] else '' }}</td>{% endfor %}
+      <td class="num"><b>{{ '{:,.2f}'.format(r.total) }}</b></td><td class="num">{{ r.gb }}</td><td class="num">{{ r.days_active }}</td><td class="num">{{ r.macs|length }}</td><td>{{ r.macs|join(', ') }}</td></tr>{% endfor %}</tbody>
+  </table></div></div>
+  <div id="t2" class="panel"><div class="wrap"><table>
+    <thead><tr><th>Date</th><th>User ID</th><th>MAC</th><th>Device</th><th class="num">Up MB</th><th class="num">Down MB</th><th class="num">Total MB</th><th>Basis</th><th>Users logged in that day</th></tr></thead>
+    <tbody>{% for r in detail %}<tr class="{{ '' if r.user else 'unm' }}"><td>{{ r.day }}</td><td>{{ r.user or '—' }}</td><td>{{ r.mac }}</td><td>{{ r.name }}</td>
+      <td class="num">{{ '{:,.2f}'.format(r.up) }}</td><td class="num">{{ '{:,.2f}'.format(r.down) }}</td><td class="num">{{ '{:,.2f}'.format(r.tot) }}</td>
+      <td>{% if r.basis == 'login' %}Login same day{% elif r.basis == 'carried' %}Carried over{% elif r.basis == 'inferred' %}Inferred from next login{% elif r.is_mac %}No login{% else %}Not a MAC{% endif %}</td><td>{{ r.seen }}</td></tr>{% endfor %}</tbody>
+  </table></div></div>
+</div>

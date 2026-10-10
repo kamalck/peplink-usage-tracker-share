@@ -64,6 +64,7 @@ python app/app.py report --site SITE1 --start 2026-10-03 --end 2026-10-09 -o SIT
 ```
 
 ## Changelog
+- **v1.5.2** (2026-10-10) — Import page: *Usage files are* now defaults to **Daily**; the *Auto* option is removed, so a 7-day/period file must be chosen explicitly (dates still read from the file name or the start-date field). No schema or config change.
 - **v1.5.1** (2026-10-10) — Import page: *Delete data* card moved to the bottom of the page, below Recent imports.
 - **v1.5.0** (2026-10-10) — Import page: *Sites — last entry added* overview (last import per site, latest usage day and login); selecting a site loads that site's import status dynamically (new `/site_panel` fragment). No schema or config change.
 - **v1.4.1** (2026-10-10) — Hostname (the usage export's *Name* column) now sits right after the MAC everywhere: the *Device name* column is renamed *Hostname* in the app and Excel, and the per-user MAC lists read `MAC (hostname)`. A usage file without a *Name*/*Hostname* column is accepted; the hostname is then left blank. No schema or config change.

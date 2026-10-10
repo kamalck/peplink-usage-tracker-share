@@ -2,10 +2,10 @@ import os, sys, argparse, hmac, secrets, time
 from datetime import datetime, date, timedelta
 from flask import Flask, render_template, request, send_file, flash, redirect, url_for, session
 from merge import merge, build_xlsx
-from daily import merge_daily, build_daily_xlsx, compute, compute_period, dates_from_name
+from daily import merge_daily, build_daily_xlsx, compute, compute_period
 import store
 
-VERSION = '1.5.1'
+VERSION = '1.5.2'
 
 
 def _secret_key():
@@ -176,7 +176,7 @@ def do_import():
     if not files:
         flash('No files selected.')
         return redirect(url_for('home', site=site))
-    kind = request.form.get('kind', 'auto')       # auto | daily | period (a 7-day export)
+    kind = request.form.get('kind', 'daily')      # daily | period (a 7-day export)
     p_start = None
     if request.form.get('period_start'):
         try:
@@ -195,7 +195,7 @@ def do_import():
                 r = store.import_events(fsite, f.filename, f.stream)
                 msgs.append(f'{f.filename}: {r["rows"]} logins read, {r["added"]} new ({r["first"]} → {r["last"]})')
             elif low.endswith('.csv'):
-                period = kind == 'period' or (kind == 'auto' and len(dates_from_name(f.filename)) >= 2)
+                period = kind == 'period'
                 if period:
                     r = store.import_period(fsite, f.filename, f.stream, start=p_start)
                     msgs.append(f'{f.filename}: {r["rows"]} devices stored for period {r["start"]} → {r["end"]}')

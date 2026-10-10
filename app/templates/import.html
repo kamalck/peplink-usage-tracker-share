@@ -4,7 +4,7 @@
   <div class="row">
     <div><label>Site</label><input type="text" name="site" value="{{ site }}" placeholder="auto from file name (e.g. SITE1)" list="sites"><datalist id="sites">{% for s in sites %}<option value="{{ s }}">{% endfor %}</datalist></div>
     <div style="flex:1"><label>Files — event logs (.xlsx) and daily usage exports (.csv), any number, any order</label><input type="file" name="files" multiple required></div>
-    <div><label>Usage files are</label><select name="kind"><option value="auto">Auto (2 dates in name = 7-day)</option><option value="daily">Daily (1 day each)</option><option value="period">7-day / period total</option></select></div>
+    <div><label>Usage files are</label><select name="kind"><option value="daily" selected>Daily (1 day each)</option><option value="period">7-day / period total</option></select></div>
     <div><label>Period start</label><input type="date" name="period_start"></div>
     <button>Import</button>
   </div>

@@ -125,6 +125,26 @@ def compute(ev, usage_by_day):
     return detail, pivot_rows, days, summary
 
 
+def device_pivot(detail, days):
+    """One row per device (MAC) with usage per day: [{mac, name, users, per{day: MB}, total, gb, days_active}], biggest first.
+    users = every account the device was attributed to over the range, in order of first appearance."""
+    devs = collections.OrderedDict()
+    for r in detail:                      # detail is sorted by day, so first appearance = chronological
+        d = devs.setdefault(r['mac'], {'mac': r['mac'], 'name': '', 'users': [], 'per': {x: 0.0 for x in days}})
+        if r['name']:
+            d['name'] = r['name']
+        if r['user'] and r['user'] not in d['users']:
+            d['users'].append(r['user'])
+        d['per'][r['day']] += r['tot']
+    rows = []
+    for d in devs.values():
+        total = sum(d['per'].values())
+        d.update(total=round(total, 2), gb=round(total / 1024, 2), days_active=sum(1 for v in d['per'].values() if v > 0))
+        rows.append(d)
+    rows.sort(key=lambda r: -r['total'])
+    return rows
+
+
 def compute_period(ev, usage, start, end):
     """One usage file covering start..end (e.g. 7 days): one row per device, user = most logins inside the period;
     else last earlier login (carried); else next later login (inferred). Same row shape as merge.merge()."""
@@ -193,6 +213,14 @@ def build_daily_xlsx(detail, pivot_rows, days):
     # daily totals row
     s.append(['TOTAL'] + [round(sum(r['per'][d] for r in pivot_rows), 2) for d in days] + [round(sum(r['total'] for r in pivot_rows), 2), '', '', '', ''])
     for c in s[s.max_row]:
+        c.font = Font(bold=True)
+    sd = out.create_sheet('Usage per device per day')
+    sd.append(['MAC address', 'Hostname', 'User ID'] + [d.strftime('%d %b') for d in days] + ['Total (MB)', 'Total (GB)', 'Days active'])
+    devs = device_pivot(detail, days)
+    for r in devs:
+        sd.append([r['mac'], r['name'], ', '.join(r['users'])] + [round(r['per'][d], 2) for d in days] + [r['total'], r['gb'], r['days_active']])
+    sd.append(['TOTAL', '', ''] + [round(sum(r['per'][d] for r in devs), 2) for d in days] + [round(sum(r['total'] for r in devs), 2), '', ''])
+    for c in sd[sd.max_row]:
         c.font = Font(bold=True)
     s2 = out.create_sheet('Device-day detail')
     s2.append(['Date', 'User ID', 'MAC address', 'Hostname', 'Upload (MB)', 'Download (MB)', 'Total (MB)', 'Basis', 'Users logged in that day (logins)'])

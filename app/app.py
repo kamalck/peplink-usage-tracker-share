@@ -2,10 +2,10 @@ import os, sys, argparse, hmac, secrets, time
 from datetime import datetime, date, timedelta
 from flask import Flask, render_template, request, send_file, flash, redirect, url_for, session
 from merge import merge, build_xlsx
-from daily import merge_daily, build_daily_xlsx, compute, compute_period
+from daily import merge_daily, build_daily_xlsx, compute, compute_period, device_pivot
 import store
 
-VERSION = '1.5.3'
+VERSION = '1.6.0'
 
 
 def _secret_key():
@@ -275,7 +275,7 @@ def report():
         name = f"{site}_Starlink_Usage_per_User_per_Day_{days[0]:%Y%m%d}-{days[-1]:%Y%m%d}.xlsx"
         return send_file(build_daily_xlsx(detail, pivot, days), as_attachment=True, download_name=name, mimetype=MIME)
     return render_template('report.html', site=site, sites=all_sites, st=st, start=start, end=end,
-                           detail=detail, pivot=pivot, days=days, summary=summary)
+                           detail=detail, pivot=pivot, days=days, summary=summary, devpivot=device_pivot(detail, days))
 
 
 # ---------- one-off merge (no storage) ----------
@@ -293,7 +293,7 @@ def quick():
                 if request.form.get('action') == 'download':
                     name = f"Starlink_Usage_per_User_per_Day_{days[0]:%Y%m%d}-{days[-1]:%Y%m%d}.xlsx"
                     return send_file(build_daily_xlsx(detail, pivot, days), as_attachment=True, download_name=name, mimetype=MIME)
-                return render_template('index.html', mode='daily', detail=detail, pivot=pivot, days=days, summary=summary)
+                return render_template('index.html', mode='daily', detail=detail, pivot=pivot, days=days, summary=summary, devpivot=device_pivot(detail, days))
             rows, per_user, unmatched, summary = merge(ev.stream, usage_files[0].stream)
         except Exception as e:
             flash(f'Could not process files: {e}')

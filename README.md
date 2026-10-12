@@ -6,6 +6,7 @@ with a **per-device usage report** (.csv, "usage per MAC") and produces one list
 
 ## Features
 - **Ongoing tracking (Import / Report pages)**: upload event-log exports and daily usage CSVs whenever you have them — stored in SQLite (`data/peplink.db`). Overlapping event-log exports are deduplicated (one row per login); re-importing a day's usage replaces it. Multiple sites/vessels supported (site read from file name, e.g. `SITE1`). Report page: pick a date range → per-user-per-day pivot, device-day detail, Excel download. Import page shows days loaded, gaps, and event-log coverage.
+- **Per device per day**: the report's *Per device per day* tab and Excel sheet list every device (MAC, hostname, attributed user(s)) with its usage for each day.
 - **Per-day mode**: upload several daily *Top client usage* exports (date taken from the file name) → usage per user **per day**, pivot sheet + device-day detail. Each device-day is attributed to the account that logged in on that device that day (most logins wins); if nobody logged in that day, the last earlier login is carried over and marked as such; if the event log only starts after that day (the portal export is capped at 10,000 rows), the next known login is used and marked *Inferred*
 - Upload both files in the browser → on-screen preview (sortable, filterable) or Excel download
 - Excel has 3 sheets: *Device usage by user*, *Usage per user* (rolled up per account), *Unmatched devices*
@@ -64,6 +65,7 @@ python app/app.py report --site SITE1 --start 2026-10-03 --end 2026-10-09 -o SIT
 ```
 
 ## Changelog
+- **v1.6.0** (2026-10-12) — New **Per device per day** view: a report tab (also on Quick merge with several daily files) and an Excel sheet *Usage per device per day* — one row per MAC with hostname, user(s) and usage per day, total, GB and days active. No schema or config change.
 - **v1.5.3** (2026-10-10) — UI: page margins much smaller (full-width content, tighter cards); *Sign out* button aligned with the other nav links. No schema or config change.
 - **v1.5.2** (2026-10-10) — Import page: *Usage files are* now defaults to **Daily**; the *Auto* option is removed, so a 7-day/period file must be chosen explicitly (dates still read from the file name or the start-date field). No schema or config change.
 - **v1.5.1** (2026-10-10) — Import page: *Delete data* card moved to the bottom of the page, below Recent imports.

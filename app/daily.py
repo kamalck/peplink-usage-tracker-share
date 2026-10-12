@@ -153,25 +153,25 @@ def compute_period(ev, usage, start, end):
     for mac, u in usage.items():
         evl = ev.get(mac, []) if u['is_mac'] else []
         inside = [(dt, usr) for dt, usr in evl if start <= dt.date() <= end]
-        user = users = lt = lu = ''
+        user = users = lt = lu = basis = ''
         n = 0
         if inside:
             c = collections.Counter(usr for _, usr in inside)
             user = c.most_common(1)[0][0]
             users = ', '.join(f'{x} ({k})' for x, k in c.most_common())
-            lt, lu, n = inside[-1][0].strftime('%Y-%m-%d %H:%M'), inside[-1][1], len(inside)
+            lt, lu, n, basis = inside[-1][0].strftime('%Y-%m-%d %H:%M'), inside[-1][1], len(inside), 'login'
         else:
             before = [x for x in evl if x[0].date() < start]
             after = [x for x in evl if x[0].date() > end]
             if before:
-                user, users = before[-1][1], '(carried from earlier login)'
+                user, users, basis = before[-1][1], '(carried from earlier login)', 'carried'
             elif after:
-                user, users = after[0][1], '(inferred from next login)'
+                user, users, basis = after[0][1], '(inferred from next login)', 'inferred'
         if evl:
             logged.add(mac)
         rows.append({'user': user, 'mac': mac, 'name': u['name'], 'up': round(u['up'], 2), 'down': round(u['down'], 2),
                      'tot': round(u['tot'], 2), 'gb': round(u['tot'] / 1024, 2), 'logins': n, 'users': users,
-                     'last_user': lu, 'last_time': lt, 'pct': round(u.get('pct', 0.0), 2), 'is_mac': u['is_mac']})
+                     'last_user': lu, 'last_time': lt, 'pct': round(u.get('pct', 0.0), 2), 'is_mac': u['is_mac'], 'basis': basis})
     rows.sort(key=lambda r: -r['tot'])
     per_user = collections.OrderedDict()
     for r in rows:
@@ -186,6 +186,29 @@ def compute_period(ev, usage, start, end):
                'matched': len(rows) - len(unmatched), 'unmatched': len(unmatched), 'users': len(per_user),
                'login_macs': len(logged), 'total_gb': round(sum(r['tot'] for r in rows) / 1024, 2)}
     return rows, per_user, unmatched, summary
+
+
+BASIS_TEXT = {'login': 'Login in period', 'carried': 'Carried from earlier login', 'inferred': 'Inferred from next login (log starts later)'}
+
+
+def build_period_xlsx(rows, per_user, unmatched):
+    """Period (e.g. 7-day) export: the usual 3 sheets from merge.build_xlsx plus 'Usage per device' first."""
+    from merge import build_xlsx
+    wb = openpyxl.load_workbook(build_xlsx(rows, per_user, unmatched))
+    sh = wb.create_sheet('Usage per device', 0)
+    sh.append(['MAC address', 'Hostname', 'User ID', 'Upload (MB)', 'Download (MB)', 'Total (MB)', 'Total (GB)', '% Usage', 'Basis'])
+    for r in rows:
+        sh.append([r['mac'], r['name'], r['user'], r['up'], r['down'], r['tot'], r['gb'], r['pct'],
+                   BASIS_TEXT.get(r['basis'], 'No login found' if r['is_mac'] else 'Not a MAC')])
+    sh.append(['TOTAL', '', '', round(sum(r['up'] for r in rows), 2), round(sum(r['down'] for r in rows), 2),
+               round(sum(r['tot'] for r in rows), 2), round(sum(r['tot'] for r in rows) / 1024, 2), '', ''])
+    for c in sh[sh.max_row]:
+        c.font = Font(bold=True)
+    _style(sh)
+    buf = io.BytesIO()
+    wb.save(buf)
+    buf.seek(0)
+    return buf
 
 
 def _style(sh):

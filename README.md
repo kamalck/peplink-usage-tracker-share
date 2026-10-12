@@ -16,7 +16,7 @@ with a **per-device usage report** (.csv, "usage per MAC") and produces one list
 - Works with any site export (SITE1, other sites) — column names are matched case-insensitively
 - CLI mode for scripting/batch use
 - Also accepts the portal's *Top client usage* export (`% Usage` column carried through); rows keyed by IP instead of MAC are listed under Unmatched with a note
-- **7-day and daily uploads**: the Import page takes daily usage CSVs (one day each) and 7-day/period CSVs (one export for a whole period; dates from the file name or a start-date field). Period files are stored separately and shown as per-user period totals (with Excel download).
+- **7-day and daily uploads**: the Import page takes daily usage CSVs (one day each) and 7-day/period CSVs (one export for a whole period; dates from the file name or a start-date field). Period files are stored separately and shown as per-device and per-user period totals (with Excel download).
 - **Sites overview**: the Import page lists every site with its last entry added (when, kind, file, period covered) plus latest usage day and latest login; click a site (or pick it in the Site box) and its import status loads below without a page reload.
 - **Delete data**: Import page → *Delete data* (bottom of the page) removes daily usage, period usage, logins, or everything for a site, optionally limited to a date range (everything needs the site name typed).
 - **Login required** (one or more accounts): user name and password come from the host's `.env` (never from the repo). With no `ADMIN_PASSWORD` set the app stays locked (503) instead of open. CSRF-protected forms, 5 failed sign-ins lock that address out for 5 minutes, sessions last 12 hours. `/health` stays open for the container healthcheck.
@@ -65,6 +65,7 @@ python app/app.py report --site SITE1 --start 2026-10-03 --end 2026-10-09 -o SIT
 ```
 
 ## Changelog
+- **v1.6.1** (2026-10-12) — 7-day/period page: new **Per device** tab (MAC, hostname, user, upload/download/total, GB, basis) and a matching *Usage per device* sheet first in the period Excel. No schema or config change.
 - **v1.6.0** (2026-10-12) — New **Per device per day** view: a report tab (also on Quick merge with several daily files) and an Excel sheet *Usage per device per day* — one row per MAC with hostname, user(s) and usage per day, total, GB and days active. No schema or config change.
 - **v1.5.3** (2026-10-10) — UI: page margins much smaller (full-width content, tighter cards); *Sign out* button aligned with the other nav links. No schema or config change.
 - **v1.5.2** (2026-10-10) — Import page: *Usage files are* now defaults to **Daily**; the *Auto* option is removed, so a 7-day/period file must be chosen explicitly (dates still read from the file name or the start-date field). No schema or config change.

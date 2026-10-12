@@ -2,5 +2,5 @@
 <div class="card"><div class="row"><a href="{{ url_for('home', site=site) }}"><button type="button" class="secondary">← Import</button></a>
 <a href="{{ url_for('period', site=site, start=start, end=end, download=1) }}"><button type="button" class="secondary">Download Excel</button></a></div>
 <small>One usage file for the whole period. Each device goes to the account with most logins inside the period; otherwise the last earlier login (carried) or next later login (inferred).</small></div>
-{% include '_total.html' %}
+{% with period=True %}{% include '_total.html' %}{% endwith %}
 {% endblock %}

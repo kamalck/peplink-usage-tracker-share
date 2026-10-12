@@ -2,10 +2,10 @@ import os, sys, argparse, hmac, secrets, time
 from datetime import datetime, date, timedelta
 from flask import Flask, render_template, request, send_file, flash, redirect, url_for, session
 from merge import merge, build_xlsx
-from daily import merge_daily, build_daily_xlsx, compute, compute_period, device_pivot
+from daily import merge_daily, build_daily_xlsx, compute, compute_period, device_pivot, build_period_xlsx
 import store
 
-VERSION = '1.6.0'
+VERSION = '1.6.1'
 
 
 def _secret_key():
@@ -252,7 +252,7 @@ def period():
     rows, per_user, unmatched, summary = compute_period(ev, usage, start, end)
     if request.args.get('download'):
         name = f"{site}_Starlink_Usage_per_User_{start:%Y%m%d}-{end:%Y%m%d}.xlsx"
-        return send_file(build_xlsx(rows, per_user, unmatched), as_attachment=True, download_name=name, mimetype=MIME)
+        return send_file(build_period_xlsx(rows, per_user, unmatched), as_attachment=True, download_name=name, mimetype=MIME)
     return render_template('period.html', site=site, start=start, end=end, rows=rows, per_user=per_user,
                            unmatched=unmatched, summary=summary)
 

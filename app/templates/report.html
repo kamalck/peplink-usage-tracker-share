@@ -6,6 +6,7 @@
     <div><label>To</label><input type="date" name="end" value="{{ end }}" min="{{ st.days[0] }}" max="{{ st.days[-1] }}"></div>
     <button>Show</button>
     <button class="secondary" name="download" value="1">Download Excel</button>
+    <button class="secondary" name="download" value="device">Download per device</button>
   </div>
   {% if st.gaps %}<small class="muted">Missing days in store: {{ st.gaps|join(', ') }}</small>{% endif %}
 </form>

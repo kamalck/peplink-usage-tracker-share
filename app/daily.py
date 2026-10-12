@@ -191,19 +191,35 @@ def compute_period(ev, usage, start, end):
 BASIS_TEXT = {'login': 'Login in period', 'carried': 'Carried from earlier login', 'inferred': 'Inferred from next login (log starts later)'}
 
 
-def build_period_xlsx(rows, per_user, unmatched):
-    """Period (e.g. 7-day) export: the usual 3 sheets from merge.build_xlsx plus 'Usage per device' first."""
-    from merge import build_xlsx
-    wb = openpyxl.load_workbook(build_xlsx(rows, per_user, unmatched))
-    sh = wb.create_sheet('Usage per device', 0)
+def _fill_period_device_sheet(sh, rows):
     sh.append(['MAC address', 'Hostname', 'User ID', 'Upload (MB)', 'Download (MB)', 'Total (MB)', 'Total (GB)', '% Usage', 'Basis'])
     for r in rows:
         sh.append([r['mac'], r['name'], r['user'], r['up'], r['down'], r['tot'], r['gb'], r['pct'],
-                   BASIS_TEXT.get(r['basis'], 'No login found' if r['is_mac'] else 'Not a MAC')])
+                   BASIS_TEXT.get(r.get('basis'), 'No login found' if r['is_mac'] else 'Not a MAC')])
     sh.append(['TOTAL', '', '', round(sum(r['up'] for r in rows), 2), round(sum(r['down'] for r in rows), 2),
                round(sum(r['tot'] for r in rows), 2), round(sum(r['tot'] for r in rows) / 1024, 2), '', ''])
     for c in sh[sh.max_row]:
         c.font = Font(bold=True)
+    _style(sh)
+
+
+def build_period_device_xlsx(rows):
+    """Per-device export of a period / single-file merge on its own (one sheet)."""
+    out = openpyxl.Workbook()
+    sh = out.active
+    sh.title = 'Usage per device'
+    _fill_period_device_sheet(sh, rows)
+    buf = io.BytesIO()
+    out.save(buf)
+    buf.seek(0)
+    return buf
+
+
+def build_period_xlsx(rows, per_user, unmatched):
+    """Period (e.g. 7-day) export: the usual 3 sheets from merge.build_xlsx plus 'Usage per device' first."""
+    from merge import build_xlsx
+    wb = openpyxl.load_workbook(build_xlsx(rows, per_user, unmatched))
+    _fill_period_device_sheet(wb.create_sheet('Usage per device', 0), rows)
     _style(sh)
     buf = io.BytesIO()
     wb.save(buf)
@@ -226,6 +242,29 @@ def _style(sh):
                 c.number_format = '#,##0.00'
 
 
+def _fill_device_sheet(sd, detail, days):
+    sd.append(['MAC address', 'Hostname', 'User ID'] + [d.strftime('%d %b') for d in days] + ['Total (MB)', 'Total (GB)', 'Days active'])
+    devs = device_pivot(detail, days)
+    for r in devs:
+        sd.append([r['mac'], r['name'], ', '.join(r['users'])] + [round(r['per'][d], 2) for d in days] + [r['total'], r['gb'], r['days_active']])
+    sd.append(['TOTAL', '', ''] + [round(sum(r['per'][d] for r in devs), 2) for d in days] + [round(sum(r['total'] for r in devs), 2), '', ''])
+    for c in sd[sd.max_row]:
+        c.font = Font(bold=True)
+
+
+def build_device_xlsx(detail, days):
+    """Per-device-per-day export on its own (one sheet)."""
+    out = openpyxl.Workbook()
+    sd = out.active
+    sd.title = 'Usage per device per day'
+    _fill_device_sheet(sd, detail, days)
+    _style(sd)
+    buf = io.BytesIO()
+    out.save(buf)
+    buf.seek(0)
+    return buf
+
+
 def build_daily_xlsx(detail, pivot_rows, days):
     out = openpyxl.Workbook()
     s = out.active
@@ -237,14 +276,7 @@ def build_daily_xlsx(detail, pivot_rows, days):
     s.append(['TOTAL'] + [round(sum(r['per'][d] for r in pivot_rows), 2) for d in days] + [round(sum(r['total'] for r in pivot_rows), 2), '', '', '', ''])
     for c in s[s.max_row]:
         c.font = Font(bold=True)
-    sd = out.create_sheet('Usage per device per day')
-    sd.append(['MAC address', 'Hostname', 'User ID'] + [d.strftime('%d %b') for d in days] + ['Total (MB)', 'Total (GB)', 'Days active'])
-    devs = device_pivot(detail, days)
-    for r in devs:
-        sd.append([r['mac'], r['name'], ', '.join(r['users'])] + [round(r['per'][d], 2) for d in days] + [r['total'], r['gb'], r['days_active']])
-    sd.append(['TOTAL', '', ''] + [round(sum(r['per'][d] for r in devs), 2) for d in days] + [round(sum(r['total'] for r in devs), 2), '', ''])
-    for c in sd[sd.max_row]:
-        c.font = Font(bold=True)
+    _fill_device_sheet(out.create_sheet('Usage per device per day'), detail, days)
     s2 = out.create_sheet('Device-day detail')
     s2.append(['Date', 'User ID', 'MAC address', 'Hostname', 'Upload (MB)', 'Download (MB)', 'Total (MB)', 'Basis', 'Users logged in that day (logins)'])
     for r in detail:

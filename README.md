@@ -65,6 +65,7 @@ python app/app.py report --site SITE1 --start 2026-10-03 --end 2026-10-09 -o SIT
 ```
 
 ## Changelog
+- **v1.6.2** (2026-10-12) — **Download per device**: a separate one-sheet Excel of the per-device view, as a button on the Report page (per device per day), the 7-day/period page and Quick merge. The existing *Download Excel* is unchanged. No schema or config change.
 - **v1.6.1** (2026-10-12) — 7-day/period page: new **Per device** tab (MAC, hostname, user, upload/download/total, GB, basis) and a matching *Usage per device* sheet first in the period Excel. No schema or config change.
 - **v1.6.0** (2026-10-12) — New **Per device per day** view: a report tab (also on Quick merge with several daily files) and an Excel sheet *Usage per device per day* — one row per MAC with hostname, user(s) and usage per day, total, GB and days active. No schema or config change.
 - **v1.5.3** (2026-10-10) — UI: page margins much smaller (full-width content, tighter cards); *Sign out* button aligned with the other nav links. No schema or config change.

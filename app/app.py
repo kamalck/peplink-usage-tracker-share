@@ -2,10 +2,10 @@ import os, sys, argparse, hmac, secrets, time
 from datetime import datetime, date, timedelta
 from flask import Flask, render_template, request, send_file, flash, redirect, url_for, session
 from merge import merge, build_xlsx
-from daily import merge_daily, build_daily_xlsx, compute, compute_period, device_pivot, build_period_xlsx
+from daily import merge_daily, build_daily_xlsx, compute, compute_period, device_pivot, build_period_xlsx, build_device_xlsx, build_period_device_xlsx
 import store
 
-VERSION = '1.6.1'
+VERSION = '1.6.2'
 
 
 def _secret_key():
@@ -250,6 +250,9 @@ def period():
         flash('No such period stored for this site.')
         return redirect(url_for('home', site=site))
     rows, per_user, unmatched, summary = compute_period(ev, usage, start, end)
+    if request.args.get('download') == 'device':
+        name = f"{site}_Starlink_Usage_per_Device_{start:%Y%m%d}-{end:%Y%m%d}.xlsx"
+        return send_file(build_period_device_xlsx(rows), as_attachment=True, download_name=name, mimetype=MIME)
     if request.args.get('download'):
         name = f"{site}_Starlink_Usage_per_User_{start:%Y%m%d}-{end:%Y%m%d}.xlsx"
         return send_file(build_period_xlsx(rows, per_user, unmatched), as_attachment=True, download_name=name, mimetype=MIME)
@@ -271,6 +274,9 @@ def report():
         flash('No usage data in that range.')
         return redirect(url_for('home', site=site))
     detail, pivot, days, summary = compute(ev, byday)
+    if request.args.get('download') == 'device':
+        name = f"{site}_Starlink_Usage_per_Device_per_Day_{days[0]:%Y%m%d}-{days[-1]:%Y%m%d}.xlsx"
+        return send_file(build_device_xlsx(detail, days), as_attachment=True, download_name=name, mimetype=MIME)
     if request.args.get('download'):
         name = f"{site}_Starlink_Usage_per_User_per_Day_{days[0]:%Y%m%d}-{days[-1]:%Y%m%d}.xlsx"
         return send_file(build_daily_xlsx(detail, pivot, days), as_attachment=True, download_name=name, mimetype=MIME)
@@ -290,6 +296,9 @@ def quick():
         try:
             if len(usage_files) > 1:
                 detail, pivot, days, summary = merge_daily(ev.stream, [(f.filename, f.stream) for f in usage_files])
+                if request.form.get('action') == 'download_device':
+                    name = f"Starlink_Usage_per_Device_per_Day_{days[0]:%Y%m%d}-{days[-1]:%Y%m%d}.xlsx"
+                    return send_file(build_device_xlsx(detail, days), as_attachment=True, download_name=name, mimetype=MIME)
                 if request.form.get('action') == 'download':
                     name = f"Starlink_Usage_per_User_per_Day_{days[0]:%Y%m%d}-{days[-1]:%Y%m%d}.xlsx"
                     return send_file(build_daily_xlsx(detail, pivot, days), as_attachment=True, download_name=name, mimetype=MIME)
@@ -298,6 +307,9 @@ def quick():
         except Exception as e:
             flash(f'Could not process files: {e}')
             return redirect(url_for('quick'))
+        if request.form.get('action') == 'download_device':
+            name = f"Starlink_Usage_per_Device_{datetime.now():%Y%m%d_%H%M}.xlsx"
+            return send_file(build_period_device_xlsx(rows), as_attachment=True, download_name=name, mimetype=MIME)
         if request.form.get('action') == 'download':
             name = f"Starlink_User_MAC_Usage_{datetime.now():%Y%m%d_%H%M}.xlsx"
             return send_file(build_xlsx(rows, per_user, unmatched), as_attachment=True, download_name=name, mimetype=MIME)

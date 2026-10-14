@@ -107,9 +107,11 @@ def merge(event_fileobj, usage_fileobj):
     per_user = collections.OrderedDict()
     for r in rows:
         if r['user']:
-            p = per_user.setdefault(r['user'], {'macs': [], 'devs': [], 'tot': 0.0})
+            p = per_user.setdefault(r['user'], {'macs': [], 'devs': [], 'up': 0.0, 'down': 0.0, 'tot': 0.0})
             p['macs'].append(r['mac'])
             p['devs'].append(dev_label(r['mac'], r['name']))
+            p['up'] += r['up']
+            p['down'] += r['down']
             p['tot'] += r['tot']
     per_user = collections.OrderedDict(sorted(per_user.items(), key=lambda x: -x[1]['tot']))
     unmatched = [r for r in rows if not r['user']]
@@ -119,6 +121,8 @@ def merge(event_fileobj, usage_fileobj):
         'devices': len(rows), 'matched': len(rows) - len(unmatched), 'unmatched': len(unmatched),
         'users': len(per_user), 'login_macs': len(logins),
         'total_gb': round(sum(r['tot'] for r in rows) / 1024, 2),
+        'up_gb': round(sum(r['up'] for r in rows) / 1024, 2), 'down_gb': round(sum(r['down'] for r in rows) / 1024, 2),
+        'unmatched_gb': round(sum(r['tot'] for r in unmatched) / 1024, 2),
     }
     return rows, per_user, unmatched, summary
 
@@ -133,13 +137,13 @@ def build_xlsx(rows, per_user, unmatched):
         s.append([r['user'], r['mac'], r['name'], r['up'], r['down'], r['tot'], r['gb'], r['pct'],
                   r['logins'], r['users'], r['last_user'], r['last_time']])
     s2 = out.create_sheet('Usage per user')
-    s2.append(['User ID', 'Devices (MAC (hostname))', 'No. of devices', 'Total (MB)', 'Total (GB)'])
+    s2.append(['User ID', 'Devices (MAC (hostname))', 'No. of devices', 'Upload (MB)', 'Download (MB)', 'Total (MB)', 'Total (GB)'])
     for u, p in per_user.items():
-        s2.append([u, ', '.join(p['devs']), len(p['macs']), round(p['tot'], 2), round(p['tot'] / 1024, 2)])
+        s2.append([u, ', '.join(p['devs']), len(p['macs']), round(p['up'], 2), round(p['down'], 2), round(p['tot'], 2), round(p['tot'] / 1024, 2)])
     s3 = out.create_sheet('Unmatched devices')
-    s3.append(['MAC address', 'Hostname', 'Total (MB)', 'Note'])
+    s3.append(['MAC address', 'Hostname', 'Upload (MB)', 'Download (MB)', 'Total (MB)', 'Note'])
     for r in unmatched:
-        s3.append([r['mac'], r['name'], r['tot'], '' if r['is_mac'] else 'Not a MAC (IP / non-portal traffic)'])
+        s3.append([r['mac'], r['name'], r['up'], r['down'], r['tot'], 'No login found' if r['is_mac'] else 'Not a MAC (IP / non-portal traffic)'])
     for sh in out:
         for c in sh[1]:
             c.font = Font(bold=True, color='FFFFFF')

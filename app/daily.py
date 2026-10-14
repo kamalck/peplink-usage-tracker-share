@@ -202,15 +202,19 @@ def compute_period(ev, usage, start, end):
     per_user = collections.OrderedDict()
     for r in rows:
         if r['user']:
-            p = per_user.setdefault(r['user'], {'macs': [], 'devs': [], 'tot': 0.0})
+            p = per_user.setdefault(r['user'], {'macs': [], 'devs': [], 'up': 0.0, 'down': 0.0, 'tot': 0.0})
             p['macs'].append(r['mac'])
             p['devs'].append(dev_label(r['mac'], r['name']))
+            p['up'] += r['up']
+            p['down'] += r['down']
             p['tot'] += r['tot']
     per_user = collections.OrderedDict(sorted(per_user.items(), key=lambda x: -x[1]['tot']))
     unmatched = [r for r in rows if not r['user']]
     summary = {'non_mac': sum(1 for r in rows if not r['is_mac']), 'devices': len(rows),
                'matched': len(rows) - len(unmatched), 'unmatched': len(unmatched), 'users': len(per_user),
-               'login_macs': len(logged), 'total_gb': round(sum(r['tot'] for r in rows) / 1024, 2)}
+               'login_macs': len(logged), 'total_gb': round(sum(r['tot'] for r in rows) / 1024, 2),
+               'up_gb': round(sum(r['up'] for r in rows) / 1024, 2), 'down_gb': round(sum(r['down'] for r in rows) / 1024, 2),
+               'unmatched_gb': round(sum(r['tot'] for r in unmatched) / 1024, 2)}
     return rows, per_user, unmatched, summary
 
 
@@ -246,7 +250,6 @@ def build_period_xlsx(rows, per_user, unmatched):
     from merge import build_xlsx
     wb = openpyxl.load_workbook(build_xlsx(rows, per_user, unmatched))
     _fill_period_device_sheet(wb.create_sheet('Usage per device', 0), rows)
-    _style(sh)
     buf = io.BytesIO()
     wb.save(buf)
     buf.seek(0)

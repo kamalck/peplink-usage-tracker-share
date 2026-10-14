@@ -1,40 +1,39 @@
+{% macro bar(u, d, mx) %}<span class="bar" style="width:{{ (60 * u / mx)|round(1) if mx else 0 }}px;background:#2e7bbf"></span><span class="bar" style="width:{{ (60 * d / mx)|round(1) if mx else 0 }}px;background:#2f8f6b"></span>{% endmacro %}
+{% set umx = (per_user.values()|map(attribute='tot')|max) if per_user else 0 %}{% set dmx = (rows|map(attribute='tot')|max) if rows else 0 %}
 <div class="stats">
+  <div class="stat"><b>{{ summary.users }}</b><span>users</span></div>
   <div class="stat"><b>{{ summary.devices }}</b><span>devices in usage report</span></div>
-  <div class="stat"><b>{{ summary.matched }}</b><span>matched to a user</span></div>
-  <div class="stat"><b>{{ summary.unmatched }}</b><span>unmatched</span></div>
-  <div class="stat"><b>{{ summary.users }}</b><span>distinct users</span></div>
-  <div class="stat"><b>{{ summary.total_gb }}</b><span>GB total</span></div>
+  <div class="stat up"><b>{{ '{:,.2f}'.format(summary.up_gb) }}</b><span>GB uploaded</span></div>
+  <div class="stat down"><b>{{ '{:,.2f}'.format(summary.down_gb) }}</b><span>GB downloaded</span></div>
+  <div class="stat"><b>{{ '{:,.2f}'.format(summary.total_gb) }}</b><span>GB total</span></div>
+  <div class="stat"><b>{{ '{:,.2f}'.format(summary.unmatched_gb) }}</b><span>GB unmatched</span></div>
+  <div class="stat"><b>{{ summary.matched }}/{{ summary.devices }}</b><span>devices matched to a user</span></div>
   {% if summary.non_mac %}<div class="stat"><b>{{ summary.non_mac }}</b><span>IP-only rows (no MAC)</span></div>{% endif %}
 </div>
 <div class="card">
   <div class="tabs">
-    {% if period %}<a class="active" data-t="t0">Per device</a>{% endif %}<a class="{{ '' if period else 'active' }}" data-t="t1">By device</a><a data-t="t2">By user</a><a data-t="t3">Unmatched ({{ unmatched|length }})</a>
+    <a class="active" data-t="t2">Per user</a><a data-t="t1">Per device</a><a data-t="t3">Unmatched ({{ unmatched|length }})</a>
   </div>
-  <div class="tools"><input id="q" placeholder="Filter (user, MAC, device)…"><small>click a header to sort</small></div>
+  <div class="tools"><input id="q" placeholder="Filter (user, MAC, hostname)…"><small>click a header to sort</small></div>
 
-  {% if period %}<div id="t0" class="panel active"><div class="wrap"><table>
-    <thead><tr><th>MAC</th><th>Hostname</th><th>User ID</th><th class="num">Upload MB</th><th class="num">Download MB</th><th class="num">Total MB</th><th class="num">GB</th><th class="num">%</th><th>Basis</th></tr></thead>
-    <tbody>{% for r in rows %}<tr class="{{ '' if r.user else 'unm' }}"><td>{{ r.mac }}</td><td>{{ r.name }}</td><td>{{ r.user or '—' }}</td>
-      <td class="num">{{ '{:,.2f}'.format(r.up) }}</td><td class="num">{{ '{:,.2f}'.format(r.down) }}</td><td class="num"><b>{{ '{:,.2f}'.format(r.tot) }}</b></td><td class="num">{{ r.gb }}</td><td class="num">{{ r.pct }}</td>
-      <td>{% if r.basis == 'login' %}Login in period{% elif r.basis == 'carried' %}Carried over{% elif r.basis == 'inferred' %}Inferred from next login{% elif r.is_mac %}No login{% else %}Not a MAC{% endif %}</td></tr>{% endfor %}</tbody>
-  </table></div></div>{% endif %}
-  <div id="t1" class="panel {{ '' if period else 'active' }}"><div class="wrap"><table>
-    <thead><tr><th>User ID</th><th>MAC</th><th>Hostname</th><th class="num">Upload MB</th><th class="num">Download MB</th><th class="num">Total MB</th><th class="num">GB</th><th class="num">%</th><th class="num">Logins</th><th>All users seen</th><th>Last login</th><th>Time</th></tr></thead>
-    <tbody>{% for r in rows %}<tr class="{{ '' if r.user else 'unm' }}">
-      <td>{{ r.user or '— no login —' }}</td><td>{{ r.mac }}</td><td>{{ r.name }}</td>
-      <td class="num">{{ '{:,.2f}'.format(r.up) }}</td><td class="num">{{ '{:,.2f}'.format(r.down) }}</td>
-      <td class="num">{{ '{:,.2f}'.format(r.tot) }}</td><td class="num">{{ r.gb }}</td><td class="num">{{ r.pct }}</td><td class="num">{{ r.logins }}</td>
-      <td>{{ r.users }}</td><td>{{ r.last_user }}</td><td>{{ r.last_time }}</td></tr>{% endfor %}</tbody>
+  <div id="t2" class="panel active"><div class="wrap"><table>
+    <thead><tr><th>User ID</th><th class="num">Devices</th><th>MACs (hostname)</th><th class="num u">Upload MB</th><th class="num d">Download MB</th><th class="num">Total MB</th><th class="num">GB</th><th>Up / Down</th></tr></thead>
+    <tbody>{% for u,p in per_user.items() %}<tr><td>{{ u }}</td><td class="num">{{ p.macs|length }}</td><td>{{ p.devs|join(', ') }}</td>
+      <td class="num">{{ '{:,.2f}'.format(p.up) }}</td><td class="num">{{ '{:,.2f}'.format(p.down) }}</td><td class="num"><b>{{ '{:,.2f}'.format(p.tot) }}</b></td><td class="num">{{ '{:,.2f}'.format(p.tot/1024) }}</td><td>{{ bar(p.up, p.down, umx) }}</td></tr>{% endfor %}</tbody>
+    <tfoot><tr><td>TOTAL</td><td></td><td></td><td class="num">{{ '{:,.2f}'.format(per_user.values()|sum(attribute='up')) }}</td><td class="num">{{ '{:,.2f}'.format(per_user.values()|sum(attribute='down')) }}</td><td class="num">{{ '{:,.2f}'.format(per_user.values()|sum(attribute='tot')) }}</td><td class="num">{{ '{:,.2f}'.format((per_user.values()|sum(attribute='tot')) / 1024) }}</td><td></td></tr></tfoot>
   </table></div></div>
 
-  <div id="t2" class="panel"><div class="wrap"><table>
-    <thead><tr><th>User ID</th><th class="num">Devices</th><th>MACs (hostname)</th><th class="num">Total MB</th><th class="num">GB</th></tr></thead>
-    <tbody>{% for u,p in per_user.items() %}<tr><td>{{ u }}</td><td class="num">{{ p.macs|length }}</td><td>{{ p.devs|join(', ') }}</td>
-      <td class="num">{{ '{:,.2f}'.format(p.tot) }}</td><td class="num">{{ '{:,.2f}'.format(p.tot/1024) }}</td></tr>{% endfor %}</tbody>
+  <div id="t1" class="panel"><div class="wrap"><table>
+    <thead><tr><th>MAC</th><th>Hostname</th><th>User ID</th><th class="num u">Upload MB</th><th class="num d">Download MB</th><th class="num">Total MB</th><th class="num">GB</th><th>Up / Down</th><th class="num">%</th>{% if period %}<th>Basis</th>{% endif %}<th class="num">Logins</th><th>All users seen</th><th>Last login</th><th>Time</th></tr></thead>
+    <tbody>{% for r in rows %}<tr class="{{ '' if r.user else 'unm' }}"><td>{{ r.mac }}</td><td>{{ r.name }}</td><td>{{ r.user or '—' }}</td>
+      <td class="num">{{ '{:,.2f}'.format(r.up) }}</td><td class="num">{{ '{:,.2f}'.format(r.down) }}</td><td class="num"><b>{{ '{:,.2f}'.format(r.tot) }}</b></td><td class="num">{{ r.gb }}</td><td>{{ bar(r.up, r.down, dmx) }}</td><td class="num">{{ r.pct }}</td>
+      {% if period %}<td>{% if r.basis == 'login' %}Login in period{% elif r.basis == 'carried' %}Carried over{% elif r.basis == 'inferred' %}Inferred from next login{% elif r.is_mac %}No login{% else %}Not a MAC{% endif %}</td>{% endif %}
+      <td class="num">{{ r.logins }}</td><td>{{ r.users }}</td><td>{{ r.last_user }}</td><td>{{ r.last_time }}</td></tr>{% endfor %}</tbody>
+    <tfoot><tr><td>TOTAL</td><td></td><td></td><td class="num">{{ '{:,.2f}'.format(rows|sum(attribute='up')) }}</td><td class="num">{{ '{:,.2f}'.format(rows|sum(attribute='down')) }}</td><td class="num">{{ '{:,.2f}'.format(rows|sum(attribute='tot')) }}</td><td class="num">{{ '{:,.2f}'.format((rows|sum(attribute='tot')) / 1024) }}</td><td></td><td></td>{% if period %}<td></td>{% endif %}<td></td><td></td><td></td><td></td></tr></tfoot>
   </table></div></div>
 
   <div id="t3" class="panel"><div class="wrap"><table>
-    <thead><tr><th>MAC</th><th>Hostname</th><th class="num">Total MB</th><th>Note</th></tr></thead>
-    <tbody>{% for r in unmatched %}<tr><td>{{ r.mac }}</td><td>{{ r.name }}</td><td class="num">{{ '{:,.2f}'.format(r.tot) }}</td><td>{{ '' if r.is_mac else 'Not a MAC (IP / non-portal traffic)' }}</td></tr>{% endfor %}</tbody>
+    <thead><tr><th>MAC</th><th>Hostname</th><th class="num u">Upload MB</th><th class="num d">Download MB</th><th class="num">Total MB</th><th>Note</th></tr></thead>
+    <tbody>{% for r in unmatched %}<tr class="unm"><td>{{ r.mac }}</td><td>{{ r.name }}</td><td class="num">{{ '{:,.2f}'.format(r.up) }}</td><td class="num">{{ '{:,.2f}'.format(r.down) }}</td><td class="num">{{ '{:,.2f}'.format(r.tot) }}</td><td>{{ 'No login found' if r.is_mac else 'Not a MAC (IP / non-portal traffic)' }}</td></tr>{% endfor %}</tbody>
   </table></div></div>
 </div>

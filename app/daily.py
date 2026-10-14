@@ -99,20 +99,23 @@ def compute(ev, usage_by_day):
                            'is_mac': u['is_mac']})
     days = sorted(set(days))
     detail.sort(key=lambda r: (r['day'], -r['tot']))
-    pivot = collections.defaultdict(lambda: {d: 0.0 for d in days})
+    per = collections.defaultdict(lambda: {m: {d: 0.0 for d in days} for m in ('tot', 'up', 'down')})
     macs = collections.defaultdict(set)
     names = {}
     for r in detail:
         if r['user']:
-            pivot[r['user']][r['day']] += r['tot']
+            for m in ('tot', 'up', 'down'):
+                per[r['user']][m][r['day']] += r[m]
             macs[r['user']].add(r['mac'])
             if r['name']:
                 names[r['mac']] = r['name']
     pivot_rows = []
-    for u, per in pivot.items():
-        total = sum(per.values())
-        pivot_rows.append({'user': u, 'per': per, 'total': round(total, 2), 'gb': round(total / 1024, 2),
-                           'macs': sorted(macs[u]), 'devs': [dev_label(m, names.get(m, '')) for m in sorted(macs[u])], 'days_active': sum(1 for v in per.values() if v > 0)})
+    for u, p in per.items():
+        total, up, down = sum(p['tot'].values()), sum(p['up'].values()), sum(p['down'].values())
+        pivot_rows.append({'user': u, 'per': p['tot'], 'per_up': p['up'], 'per_down': p['down'],
+                           'total': round(total, 2), 'up': round(up, 2), 'down': round(down, 2), 'gb': round(total / 1024, 2),
+                           'macs': sorted(macs[u]), 'devs': [dev_label(m, names.get(m, '')) for m in sorted(macs[u])],
+                           'days_active': sum(1 for v in p['tot'].values() if v > 0)})
     pivot_rows.sort(key=lambda r: -r['total'])
     unmatched_tot = sum(r['tot'] for r in detail if not r['user'])
     summary = {'days': len(days), 'first': days[0] if days else None, 'last': days[-1] if days else None,
@@ -121,27 +124,50 @@ def compute(ev, usage_by_day):
                'carried': sum(1 for r in detail if r['basis'] == 'carried'),
                'inferred': sum(1 for r in detail if r['basis'] == 'inferred'),
                'unmatched_gb': round(unmatched_tot / 1024, 2),
+               'up_gb': round(sum(r['up'] for r in detail) / 1024, 2),
+               'down_gb': round(sum(r['down'] for r in detail) / 1024, 2),
                'total_gb': round(sum(r['tot'] for r in detail) / 1024, 2)}
     return detail, pivot_rows, days, summary
 
 
 def device_pivot(detail, days):
-    """One row per device (MAC) with usage per day: [{mac, name, users, per{day: MB}, total, gb, days_active}], biggest first.
-    users = every account the device was attributed to over the range, in order of first appearance."""
+    """One row per device (MAC) with usage per day: [{mac, name, users, per/per_up/per_down{day: MB}, total, up, down, gb,
+    days_active}], biggest first. users = every account the device was attributed to over the range, in order of first appearance."""
     devs = collections.OrderedDict()
     for r in detail:                      # detail is sorted by day, so first appearance = chronological
-        d = devs.setdefault(r['mac'], {'mac': r['mac'], 'name': '', 'users': [], 'per': {x: 0.0 for x in days}})
+        d = devs.setdefault(r['mac'], {'mac': r['mac'], 'name': '', 'users': [], 'per': {x: 0.0 for x in days},
+                                       'per_up': {x: 0.0 for x in days}, 'per_down': {x: 0.0 for x in days}})
         if r['name']:
             d['name'] = r['name']
         if r['user'] and r['user'] not in d['users']:
             d['users'].append(r['user'])
         d['per'][r['day']] += r['tot']
+        d['per_up'][r['day']] += r['up']
+        d['per_down'][r['day']] += r['down']
     rows = []
     for d in devs.values():
         total = sum(d['per'].values())
-        d.update(total=round(total, 2), gb=round(total / 1024, 2), days_active=sum(1 for v in d['per'].values() if v > 0))
+        d.update(total=round(total, 2), up=round(sum(d['per_up'].values()), 2), down=round(sum(d['per_down'].values()), 2),
+                 gb=round(total / 1024, 2), days_active=sum(1 for v in d['per'].values() if v > 0))
         rows.append(d)
     rows.sort(key=lambda r: -r['total'])
+    return rows
+
+
+def unmatched_devices(detail):
+    """Devices (whole range) that never got a user: [{mac, name, up, down, tot, gb, note}], biggest first."""
+    out = collections.OrderedDict()
+    for r in detail:
+        if r['user']:
+            continue
+        d = out.setdefault(r['mac'], {'mac': r['mac'], 'name': '', 'up': 0.0, 'down': 0.0, 'tot': 0.0,
+                                      'note': 'No login found' if r['is_mac'] else 'Not a MAC (IP / non-portal traffic)'})
+        d['name'] = r['name'] or d['name']
+        d['up'] += r['up']; d['down'] += r['down']; d['tot'] += r['tot']
+    rows = list(out.values())
+    for d in rows:
+        d.update(up=round(d['up'], 2), down=round(d['down'], 2), tot=round(d['tot'], 2), gb=round(d['tot'] / 1024, 2))
+    rows.sort(key=lambda r: -r['tot'])
     return rows
 
 
@@ -242,55 +268,102 @@ def _style(sh):
                 c.number_format = '#,##0.00'
 
 
-def _fill_device_sheet(sd, detail, days):
-    sd.append(['MAC address', 'Hostname', 'User ID'] + [d.strftime('%d %b') for d in days] + ['Total (MB)', 'Total (GB)', 'Days active'])
-    devs = device_pivot(detail, days)
+METRICS = (('tot', 'per', '', 'Total'), ('up', 'per_up', ' - Upload', 'Upload'), ('down', 'per_down', ' - Download', 'Download'))
+
+
+def _fill_device_sheet(sd, devs, days, key='per'):
+    """Per-device-per-day sheet for one metric (key: per | per_up | per_down)."""
+    tot_key = {'per': 'total', 'per_up': 'up', 'per_down': 'down'}[key]
+    sd.append(['MAC address', 'Hostname', 'User ID'] + [d.strftime('%d %b') for d in days] + [f'{dict(per="Total", per_up="Upload", per_down="Download")[key]} (MB)', 'Total (GB)' if key == 'per' else '', 'Days active'])
     for r in devs:
-        sd.append([r['mac'], r['name'], ', '.join(r['users'])] + [round(r['per'][d], 2) for d in days] + [r['total'], r['gb'], r['days_active']])
-    sd.append(['TOTAL', '', ''] + [round(sum(r['per'][d] for r in devs), 2) for d in days] + [round(sum(r['total'] for r in devs), 2), '', ''])
+        sd.append([r['mac'], r['name'], ', '.join(r['users'])] + [round(r[key][d], 2) for d in days] + [r[tot_key], r['gb'] if key == 'per' else '', r['days_active']])
+    sd.append(['TOTAL', '', ''] + [round(sum(r[key][d] for r in devs), 2) for d in days] + [round(sum(r[tot_key] for r in devs), 2), '', ''])
     for c in sd[sd.max_row]:
         c.font = Font(bold=True)
 
 
-def build_device_xlsx(detail, days):
-    """Per-device-per-day export on its own (one sheet)."""
-    out = openpyxl.Workbook()
-    sd = out.active
-    sd.title = 'Usage per device per day'
-    _fill_device_sheet(sd, detail, days)
-    _style(sd)
+def _fill_user_day_sheet(s, pivot_rows, days, key='per'):
+    tot_key = {'per': 'total', 'per_up': 'up', 'per_down': 'down'}[key]
+    label = {'per': 'Total', 'per_up': 'Upload', 'per_down': 'Download'}[key]
+    s.append(['User ID'] + [d.strftime('%d %b') for d in days] + [f'{label} (MB)', 'Total (GB)' if key == 'per' else '', 'Days active', 'No. of devices', 'MACs (hostname)'])
+    for r in pivot_rows:
+        s.append([r['user']] + [round(r[key][d], 2) for d in days] + [r[tot_key], r['gb'] if key == 'per' else '', r['days_active'], len(r['macs']), ', '.join(r['devs'])])
+    s.append(['TOTAL'] + [round(sum(r[key][d] for r in pivot_rows), 2) for d in days] + [round(sum(r[tot_key] for r in pivot_rows), 2), '', '', '', ''])
+    for c in s[s.max_row]:
+        c.font = Font(bold=True)
+
+
+def _save(wb):
+    for sh in wb:
+        _style(sh)
     buf = io.BytesIO()
-    out.save(buf)
+    wb.save(buf)
     buf.seek(0)
     return buf
 
 
-def build_daily_xlsx(detail, pivot_rows, days):
-    out = openpyxl.Workbook()
-    s = out.active
-    s.title = 'Usage per user per day'
-    s.append(['User ID'] + [d.strftime('%d %b') for d in days] + ['Total (MB)', 'Total (GB)', 'Days active', 'No. of devices', 'MACs (hostname)'])
+def build_device_xlsx(detail, days, view='day'):
+    """Per-device export on its own. view 'total' = one row per device for the range (upload / download / total);
+    'day' = per-day sheets for Total, Upload and Download."""
+    wb = openpyxl.Workbook()
+    wb.remove(wb.active)
+    devs = device_pivot(detail, days)
+    if view == 'total':
+        _fill_total_device_sheet(wb.create_sheet('Usage per device'), devs)
+    else:
+        for _, key, suffix, _ in METRICS:
+            _fill_device_sheet(wb.create_sheet('Usage per device per day' if not suffix else 'Device per day' + suffix), devs, days, key)
+    return _save(wb)
+
+
+def _fill_total_device_sheet(sd, devs):
+    sd.append(['MAC address', 'Hostname', 'User ID', 'Upload (MB)', 'Download (MB)', 'Total (MB)', 'Total (GB)', 'Days active'])
+    for r in devs:
+        sd.append([r['mac'], r['name'], ', '.join(r['users']), r['up'], r['down'], r['total'], r['gb'], r['days_active']])
+    sd.append(['TOTAL', '', '', round(sum(r['up'] for r in devs), 2), round(sum(r['down'] for r in devs), 2),
+               round(sum(r['total'] for r in devs), 2), round(sum(r['total'] for r in devs) / 1024, 2), ''])
+    for c in sd[sd.max_row]:
+        c.font = Font(bold=True)
+
+
+def build_total_xlsx(detail, pivot_rows, days):
+    """Total-period workbook: per user, per device (both with upload / download / total) and unmatched."""
+    wb = openpyxl.Workbook()
+    s = wb.active
+    s.title = 'Usage per user'
+    s.append(['User ID', 'No. of devices', 'MACs (hostname)', 'Upload (MB)', 'Download (MB)', 'Total (MB)', 'Total (GB)'])
     for r in pivot_rows:
-        s.append([r['user']] + [round(r['per'][d], 2) for d in days] + [r['total'], r['gb'], r['days_active'], len(r['macs']), ', '.join(r['devs'])])
-    # daily totals row
-    s.append(['TOTAL'] + [round(sum(r['per'][d] for r in pivot_rows), 2) for d in days] + [round(sum(r['total'] for r in pivot_rows), 2), '', '', '', ''])
+        s.append([r['user'], len(r['macs']), ', '.join(r['devs']), r['up'], r['down'], r['total'], r['gb']])
+    s.append(['TOTAL', '', '', round(sum(r['up'] for r in pivot_rows), 2), round(sum(r['down'] for r in pivot_rows), 2),
+              round(sum(r['total'] for r in pivot_rows), 2), round(sum(r['total'] for r in pivot_rows) / 1024, 2)])
     for c in s[s.max_row]:
         c.font = Font(bold=True)
-    _fill_device_sheet(out.create_sheet('Usage per device per day'), detail, days)
-    s2 = out.create_sheet('Device-day detail')
+    _fill_total_device_sheet(wb.create_sheet('Usage per device'), device_pivot(detail, days))
+    u = wb.create_sheet('Unmatched')
+    u.append(['MAC / ID', 'Hostname', 'Upload (MB)', 'Download (MB)', 'Total (MB)', 'Note'])
+    for r in unmatched_devices(detail):
+        u.append([r['mac'], r['name'], r['up'], r['down'], r['tot'], r['note']])
+    return _save(wb)
+
+
+def build_daily_xlsx(detail, pivot_rows, days):
+    """Day-wise workbook: per user and per device for Total, Upload and Download, device-day detail, unmatched."""
+    wb = openpyxl.Workbook()
+    wb.remove(wb.active)
+    devs = device_pivot(detail, days)
+    for _, key, suffix, _ in METRICS:
+        _fill_user_day_sheet(wb.create_sheet('Usage per user per day' if not suffix else 'User per day' + suffix), pivot_rows, days, key)
+    for _, key, suffix, _ in METRICS:
+        _fill_device_sheet(wb.create_sheet('Usage per device per day' if not suffix else 'Device per day' + suffix), devs, days, key)
+    s2 = wb.create_sheet('Device-day detail')
     s2.append(['Date', 'User ID', 'MAC address', 'Hostname', 'Upload (MB)', 'Download (MB)', 'Total (MB)', 'Basis', 'Users logged in that day (logins)'])
     for r in detail:
         s2.append([r['day'].isoformat(), r['user'], r['mac'], r['name'], r['up'], r['down'], r['tot'],
                    {'login': 'Login same day', 'carried': 'Carried from earlier login', 'inferred': 'Inferred from next login (log starts later)', '': ('No login found' if r['is_mac'] else 'Not a MAC')}[r['basis']],
                    r['seen']])
-    s3 = out.create_sheet('Unmatched')
-    s3.append(['Date', 'MAC / ID', 'Hostname', 'Total (MB)', 'Note'])
+    s3 = wb.create_sheet('Unmatched')
+    s3.append(['Date', 'MAC / ID', 'Hostname', 'Upload (MB)', 'Download (MB)', 'Total (MB)', 'Note'])
     for r in detail:
         if not r['user']:
-            s3.append([r['day'].isoformat(), r['mac'], r['name'], r['tot'], 'No login found' if r['is_mac'] else 'Not a MAC (IP / non-portal traffic)'])
-    for sh in out:
-        _style(sh)
-    buf = io.BytesIO()
-    out.save(buf)
-    buf.seek(0)
-    return buf
+            s3.append([r['day'].isoformat(), r['mac'], r['name'], r['up'], r['down'], r['tot'], 'No login found' if r['is_mac'] else 'Not a MAC (IP / non-portal traffic)'])
+    return _save(wb)

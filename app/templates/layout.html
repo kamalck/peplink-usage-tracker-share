@@ -58,6 +58,21 @@
   ul.msgs li.err{background:#fdecea;border-color:#f5c2c0}
   .badge{display:inline-block;background:#eef2f7;border-radius:4px;padding:2px 7px;font-size:12px;margin:2px}
   .badge.gap{background:#fdecea;color:#8a1c1c}
+  .seg{display:inline-flex;border:1px solid var(--accent);border-radius:6px;overflow:hidden}
+  .seg button{border:0;border-radius:0;background:#fff;color:var(--accent);padding:9px 16px}
+  .seg button.on{background:var(--accent);color:#fff}
+  .seg.small button{padding:5px 11px;font-weight:500}
+  .vtabs{display:flex;gap:4px;border-bottom:1px solid var(--line);margin-bottom:12px}
+  .vtabs a{padding:8px 14px;color:var(--muted);border-bottom:2px solid transparent;cursor:pointer}
+  .vtabs a.on{color:var(--accent);border-color:var(--accent);font-weight:600}
+  .vpanel{display:none}.vpanel.on{display:block}
+  footer{text-align:center;color:var(--muted);font-size:12px;padding:14px 8px 18px}
+  .hide{display:none}
+  .metric-tot .m-up,.metric-tot .m-down,.metric-tot .m-both,.metric-up .m-tot,.metric-up .m-down,.metric-up .m-both,
+  .metric-down .m-tot,.metric-down .m-up,.metric-down .m-both,.metric-both .m-tot,.metric-both .m-up,.metric-both .m-down{display:none}
+  th.u{color:#2e7bbf}th.d{color:#2f8f6b}tfoot td{font-weight:700;background:#f7f9fb}
+  .stat.up b{color:#2e7bbf}.stat.down b{color:#2f8f6b}
+  .bar{display:inline-block;height:8px;border-radius:2px;vertical-align:middle}
 </style>
 </head>
 <body>
@@ -68,6 +83,7 @@
 {% with msgs = get_flashed_messages() %}{% if msgs %}<ul class="msgs">{% for m in msgs %}<li class="{{ 'err' if 'ERROR' in m or 'skipped' in m or 'No ' in m }}">{{ m }}</li>{% endfor %}</ul>{% endif %}{% endwith %}
 {% block content %}{% endblock %}
 </main>
+<footer>Concept by KCK · Coded with Claude (AI)</footer>
 <script>
 document.querySelectorAll('.tabs a').forEach(a=>a.onclick=()=>{document.querySelectorAll('.tabs a,.panel').forEach(e=>e.classList.remove('active'));a.classList.add('active');document.getElementById(a.dataset.t).classList.add('active');});
 const q=document.getElementById('q'); if(q) q.oninput=e=>{const v=e.target.value.toLowerCase();document.querySelectorAll('.panel.active tbody tr').forEach(tr=>tr.style.display=tr.textContent.toLowerCase().includes(v)?'':'none');};

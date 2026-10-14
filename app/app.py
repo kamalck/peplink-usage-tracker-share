@@ -2,10 +2,10 @@ import os, sys, argparse, hmac, secrets, time
 from datetime import datetime, date, timedelta
 from flask import Flask, render_template, request, send_file, flash, redirect, url_for, session
 from merge import merge, build_xlsx
-from daily import merge_daily, build_daily_xlsx, compute, compute_period, device_pivot, build_period_xlsx, build_device_xlsx, build_period_device_xlsx
+from daily import merge_daily, build_daily_xlsx, compute, compute_period, device_pivot, build_period_xlsx, build_device_xlsx, build_period_device_xlsx, build_total_xlsx, unmatched_devices
 import store
 
-VERSION = '1.6.4'
+VERSION = '1.7.0'
 
 
 def _secret_key():
@@ -148,6 +148,19 @@ def _day_arg(name, default):
     return default
 
 
+def _view_arg(src):
+    """'total' (whole period, the default) or 'day' (one column per day)."""
+    return 'day' if (src.get('view') or '').lower() == 'day' else 'total'
+
+
+def _daily_files(site, detail, pivot, days, view):
+    """(download name, workbook) for the Excel buttons of the day/total report."""
+    rng = f"{days[0]:%Y%m%d}-{days[-1]:%Y%m%d}"
+    if view == 'total':
+        return f"{site}_Starlink_Usage_per_User_{rng}.xlsx", build_total_xlsx(detail, pivot, days)
+    return f"{site}_Starlink_Usage_per_User_per_Day_{rng}.xlsx", build_daily_xlsx(detail, pivot, days)
+
+
 def _site_arg():
     s = (request.values.get('site') or '').strip().upper()
     all_sites = store.sites()
@@ -274,14 +287,17 @@ def report():
         flash('No usage data in that range.')
         return redirect(url_for('home', site=site))
     detail, pivot, days, summary = compute(ev, byday)
+    view = _view_arg(request.args)
+    prefix = f"{site}_" if site else ''
     if request.args.get('download') == 'device':
-        name = f"{site}_Starlink_Usage_per_Device_per_Day_{days[0]:%Y%m%d}-{days[-1]:%Y%m%d}.xlsx"
-        return send_file(build_device_xlsx(detail, days), as_attachment=True, download_name=name, mimetype=MIME)
+        name = f"{prefix}Starlink_Usage_per_Device{'' if view == 'total' else '_per_Day'}_{days[0]:%Y%m%d}-{days[-1]:%Y%m%d}.xlsx"
+        return send_file(build_device_xlsx(detail, days, view), as_attachment=True, download_name=name, mimetype=MIME)
     if request.args.get('download'):
-        name = f"{site}_Starlink_Usage_per_User_per_Day_{days[0]:%Y%m%d}-{days[-1]:%Y%m%d}.xlsx"
-        return send_file(build_daily_xlsx(detail, pivot, days), as_attachment=True, download_name=name, mimetype=MIME)
-    return render_template('report.html', site=site, sites=all_sites, st=st, start=start, end=end,
-                           detail=detail, pivot=pivot, days=days, summary=summary, devpivot=device_pivot(detail, days))
+        name, buf = _daily_files(site, detail, pivot, days, view)
+        return send_file(buf, as_attachment=True, download_name=name, mimetype=MIME)
+    return render_template('report.html', site=site, sites=all_sites, st=st, start=start, end=end, view=view,
+                           detail=detail, pivot=pivot, days=days, summary=summary, devpivot=device_pivot(detail, days),
+                           unmatched=unmatched_devices(detail))
 
 
 # ---------- one-off merge (no storage) ----------
@@ -296,13 +312,15 @@ def quick():
         try:
             if len(usage_files) > 1:
                 detail, pivot, days, summary = merge_daily(ev.stream, [(f.filename, f.stream) for f in usage_files])
+                view = _view_arg(request.form)
                 if request.form.get('action') == 'download_device':
-                    name = f"Starlink_Usage_per_Device_per_Day_{days[0]:%Y%m%d}-{days[-1]:%Y%m%d}.xlsx"
-                    return send_file(build_device_xlsx(detail, days), as_attachment=True, download_name=name, mimetype=MIME)
+                    name = f"Starlink_Usage_per_Device{'' if view == 'total' else '_per_Day'}_{days[0]:%Y%m%d}-{days[-1]:%Y%m%d}.xlsx"
+                    return send_file(build_device_xlsx(detail, days, view), as_attachment=True, download_name=name, mimetype=MIME)
                 if request.form.get('action') == 'download':
-                    name = f"Starlink_Usage_per_User_per_Day_{days[0]:%Y%m%d}-{days[-1]:%Y%m%d}.xlsx"
-                    return send_file(build_daily_xlsx(detail, pivot, days), as_attachment=True, download_name=name, mimetype=MIME)
-                return render_template('index.html', mode='daily', detail=detail, pivot=pivot, days=days, summary=summary, devpivot=device_pivot(detail, days))
+                    name, buf = _daily_files('', detail, pivot, days, view)
+                    return send_file(buf, as_attachment=True, download_name=name.lstrip('_'), mimetype=MIME)
+                return render_template('index.html', mode='daily', detail=detail, pivot=pivot, days=days, summary=summary,
+                                       devpivot=device_pivot(detail, days), unmatched=unmatched_devices(detail), view=view)
             rows, per_user, unmatched, summary = merge(ev.stream, usage_files[0].stream)
         except Exception as e:
             flash(f'Could not process files: {e}')
@@ -332,6 +350,7 @@ def cli():
     i.add_argument('files', nargs='+'); i.add_argument('--site', help='Site label (default: parsed from file name, e.g. SITE1)')
     r = sub.add_parser('report', help='Per-user-per-day report from the store')
     r.add_argument('--site', required=True); r.add_argument('--start'); r.add_argument('--end'); r.add_argument('-o', '--output')
+    r.add_argument('--view', choices=['total', 'day'], default='total', help='total = one row per user/device for the whole range (default); day = one column per day')
     a = p.parse_args()
     if a.cmd == 'merge':
         if len(a.usage) > 1:
@@ -364,8 +383,9 @@ def cli():
         start, end = a.start or st['days'][0], a.end or st['days'][-1]
         ev, byday = store.load_for_report(a.site.upper(), date.fromisoformat(start), date.fromisoformat(end))
         detail, pivot, days, summary = compute(ev, byday)
-        out = a.output or f"{a.site.upper()}_Starlink_Usage_per_User_per_Day_{days[0]:%Y%m%d}-{days[-1]:%Y%m%d}.xlsx"
-        open(out, 'wb').write(build_daily_xlsx(detail, pivot, days).read())
+        dflt, buf = _daily_files(a.site.upper(), detail, pivot, days, a.view)
+        out = a.output or dflt
+        open(out, 'wb').write(buf.read())
         print(f"Wrote {out}: {summary['days']} days, {summary['users']} users, {summary['total_gb']} GB, unmatched {summary['unmatched_gb']} GB")
 
 

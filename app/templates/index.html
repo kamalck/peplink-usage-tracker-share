@@ -13,14 +13,15 @@
       <small>One file → totals per user. Several daily exports (date in file name, e.g. <code>…_2026-10-05T00_00_00.csv</code>) → usage per user <b>per day</b></small>
     </div>
   </div>
+  <input type="hidden" name="view" value="{{ view|default('total') }}">
   <div class="actions">
     <button name="action" value="preview">Preview</button>
-    <button name="action" value="download" class="secondary">Download Excel</button>
-    <button name="action" value="download_device" class="secondary">Download per device</button>
+    <button name="action" value="download" id="dl1" class="secondary">Download Excel</button>
+    <button name="action" value="download_device" id="dl2" class="secondary">Download per device</button>
   </div>
 </form>
 
-{% if mode == 'daily' %}{% include '_daily.html' %}{% endif %}
+{% if mode == 'daily' %}<div class="card"><div class="row">{% include '_viewtoggle.html' %}<small>Total period is the default. The Excel buttons follow the view.</small></div></div>{% include '_daily.html' %}{% endif %}
 {% if mode == 'total' %}{% include '_total.html' %}{% endif %}
 
 {% endblock %}

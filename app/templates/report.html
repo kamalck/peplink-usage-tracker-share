@@ -1,12 +1,14 @@
-{% extends "layout.html" %}{% set nav="report" %}{% block subtitle %}{{ site }} — usage per user per day{% endblock %}{% block content %}
+{% extends "layout.html" %}{% set nav="report" %}{% block subtitle %}{{ site }} — usage report{% endblock %}{% block content %}
 <form class="card" method="get" action="{{ url_for('report') }}">
   <div class="row">
     <div><label>Site</label><select name="site">{% for s in sites %}<option {{ 'selected' if s==site }}>{{ s }}</option>{% endfor %}</select></div>
     <div><label>From</label><input type="date" name="start" value="{{ start }}" min="{{ st.days[0] }}" max="{{ st.days[-1] }}"></div>
     <div><label>To</label><input type="date" name="end" value="{{ end }}" min="{{ st.days[0] }}" max="{{ st.days[-1] }}"></div>
+    {% include '_viewtoggle.html' %}
+    <input type="hidden" name="view" value="{{ view }}">
     <button>Show</button>
-    <button class="secondary" name="download" value="1">Download Excel</button>
-    <button class="secondary" name="download" value="device">Download per device</button>
+    <button class="secondary" id="dl1" name="download" value="1">Download Excel</button>
+    <button class="secondary" id="dl2" name="download" value="device">Download per device</button>
   </div>
   {% if st.gaps %}<small class="muted">Missing days in store: {{ st.gaps|join(', ') }}</small>{% endif %}
 </form>

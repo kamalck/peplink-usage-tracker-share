@@ -1,29 +1,75 @@
+{% macro dc(t, u, d) %}<td class="num"><span class="m-tot">{{ '{:,.0f}'.format(t) if t else '' }}</span><span class="m-up">{{ '{:,.0f}'.format(u) if u else '' }}</span><span class="m-down">{{ '{:,.0f}'.format(d) if d else '' }}</span><span class="m-both">{% if t %}{{ '{:,.0f}'.format(u) }} / {{ '{:,.0f}'.format(d) }}{% endif %}</span></td>{% endmacro %}
+{% macro bar(u, d, mx) %}<span class="bar" style="width:{{ (60 * u / mx)|round(1) if mx else 0 }}px;background:#2e7bbf"></span><span class="bar" style="width:{{ (60 * d / mx)|round(1) if mx else 0 }}px;background:#2f8f6b"></span>{% endmacro %}
+{% set umx = (pivot[0].total if pivot else 0) %}{% set dmx = (devpivot[0].total if devpivot else 0) %}
 <div class="stats">
   <div class="stat"><b>{{ summary.days }}</b><span>days ({{ summary.first.strftime('%d %b') }} – {{ summary.last.strftime('%d %b') }})</span></div>
   <div class="stat"><b>{{ summary.users }}</b><span>users</span></div>
+  <div class="stat up"><b>{{ '{:,.2f}'.format(summary.up_gb) }}</b><span>GB uploaded</span></div>
+  <div class="stat down"><b>{{ '{:,.2f}'.format(summary.down_gb) }}</b><span>GB downloaded</span></div>
+  <div class="stat"><b>{{ '{:,.2f}'.format(summary.total_gb) }}</b><span>GB total</span></div>
+  <div class="stat"><b>{{ '{:,.2f}'.format(summary.unmatched_gb) }}</b><span>GB unmatched</span></div>
   <div class="stat"><b>{{ summary.matched }}/{{ summary.device_days }}</b><span>device-days matched</span></div>
   <div class="stat"><b>{{ summary.carried }}</b><span>carried from earlier login</span></div>
   {% if summary.inferred %}<div class="stat"><b>{{ summary.inferred }}</b><span>inferred from next login</span></div>{% endif %}
-  <div class="stat"><b>{{ summary.total_gb }}</b><span>GB total</span></div>
-  <div class="stat"><b>{{ summary.unmatched_gb }}</b><span>GB unmatched</span></div>
 </div>
-<div class="card">
-  <div class="tabs"><a class="active" data-t="t1">Per user per day</a><a data-t="t3">Per device per day</a><a data-t="t2">Device-day detail</a></div>
-  <div class="tools"><input id="q" placeholder="Filter…"><small>click a header to sort</small></div>
-  <div id="t1" class="panel active"><div class="wrap"><table>
-    <thead><tr><th>User ID</th>{% for d in days %}<th class="num">{{ d.strftime('%d %b') }}</th>{% endfor %}<th class="num">Total MB</th><th class="num">GB</th><th class="num">Days</th><th class="num">Devices</th><th>MACs (hostname)</th></tr></thead>
-    <tbody>{% for r in pivot %}<tr><td>{{ r.user }}</td>{% for d in days %}<td class="num">{{ '{:,.0f}'.format(r.per[d]) if r.per[d] else '' }}</td>{% endfor %}
-      <td class="num"><b>{{ '{:,.2f}'.format(r.total) }}</b></td><td class="num">{{ r.gb }}</td><td class="num">{{ r.days_active }}</td><td class="num">{{ r.macs|length }}</td><td>{{ r.devs|join(', ') }}</td></tr>{% endfor %}</tbody>
+<div class="card" id="vr" data-view="{{ view|default('total') }}">
+  <div class="vtabs" data-v="total"><a data-t="u-t">Per user</a><a data-t="d-t">Per device</a><a data-t="x-t">Unmatched ({{ unmatched|length }})</a></div>
+  <div class="vtabs" data-v="day"><a data-t="u-d">Per user per day</a><a data-t="d-d">Per device per day</a><a data-t="det">Device-day detail</a></div>
+  <div class="tools"><input id="vq" placeholder="Filter…"><small>click a header to sort</small>
+    <span id="metricrow" class="hide"><label style="display:inline;margin:0 6px 0 14px">Day columns show</label><span class="seg small" id="metric"><button type="button" data-m="tot">Total</button><button type="button" data-m="up">Upload</button><button type="button" data-m="down">Download</button><button type="button" data-m="both">Upload / Download</button></span></span></div>
+  <div id="vbody" class="metric-tot">
+  <div id="u-t" class="vpanel"><div class="wrap"><table>
+    <thead><tr><th>User ID</th><th class="num">Devices</th><th>MACs (hostname)</th><th class="num u">Upload MB</th><th class="num d">Download MB</th><th class="num">Total MB</th><th class="num">GB</th><th>Up / Down</th></tr></thead>
+    <tbody>{% for r in pivot %}<tr><td>{{ r.user }}</td><td class="num">{{ r.macs|length }}</td><td>{{ r.devs|join(', ') }}</td><td class="num">{{ '{:,.2f}'.format(r.up) }}</td><td class="num">{{ '{:,.2f}'.format(r.down) }}</td><td class="num"><b>{{ '{:,.2f}'.format(r.total) }}</b></td><td class="num">{{ r.gb }}</td><td>{{ bar(r.up, r.down, umx) }}</td></tr>{% endfor %}</tbody>
+    <tfoot><tr><td>TOTAL</td><td></td><td></td><td class="num">{{ '{:,.2f}'.format(pivot|sum(attribute='up')) }}</td><td class="num">{{ '{:,.2f}'.format(pivot|sum(attribute='down')) }}</td><td class="num">{{ '{:,.2f}'.format(pivot|sum(attribute='total')) }}</td><td class="num">{{ '{:,.2f}'.format((pivot|sum(attribute='total')) / 1024) }}</td><td></td></tr></tfoot>
   </table></div></div>
-  <div id="t3" class="panel"><div class="wrap"><table>
-    <thead><tr><th>MAC</th><th>Hostname</th><th>User ID</th>{% for d in days %}<th class="num">{{ d.strftime('%d %b') }}</th>{% endfor %}<th class="num">Total MB</th><th class="num">GB</th><th class="num">Days</th></tr></thead>
-    <tbody>{% for r in devpivot %}<tr class="{{ '' if r.users else 'unm' }}"><td>{{ r.mac }}</td><td>{{ r.name }}</td><td>{{ r.users|join(', ') or '—' }}</td>{% for d in days %}<td class="num">{{ '{:,.0f}'.format(r.per[d]) if r.per[d] else '' }}</td>{% endfor %}
-      <td class="num"><b>{{ '{:,.2f}'.format(r.total) }}</b></td><td class="num">{{ r.gb }}</td><td class="num">{{ r.days_active }}</td></tr>{% endfor %}</tbody>
+  <div id="d-t" class="vpanel"><div class="wrap"><table>
+    <thead><tr><th>MAC</th><th>Hostname</th><th>User ID</th><th class="num u">Upload MB</th><th class="num d">Download MB</th><th class="num">Total MB</th><th class="num">GB</th><th class="num">Days</th><th>Up / Down</th></tr></thead>
+    <tbody>{% for r in devpivot %}<tr class="{{ '' if r.users else 'unm' }}"><td>{{ r.mac }}</td><td>{{ r.name }}</td><td>{{ r.users|join(', ') or '—' }}</td><td class="num">{{ '{:,.2f}'.format(r.up) }}</td><td class="num">{{ '{:,.2f}'.format(r.down) }}</td><td class="num"><b>{{ '{:,.2f}'.format(r.total) }}</b></td><td class="num">{{ r.gb }}</td><td class="num">{{ r.days_active }}</td><td>{{ bar(r.up, r.down, dmx) }}</td></tr>{% endfor %}</tbody>
+    <tfoot><tr><td>TOTAL</td><td></td><td></td><td class="num">{{ '{:,.2f}'.format(devpivot|sum(attribute='up')) }}</td><td class="num">{{ '{:,.2f}'.format(devpivot|sum(attribute='down')) }}</td><td class="num">{{ '{:,.2f}'.format(devpivot|sum(attribute='total')) }}</td><td class="num">{{ '{:,.2f}'.format((devpivot|sum(attribute='total')) / 1024) }}</td><td></td><td></td></tr></tfoot>
   </table></div></div>
-  <div id="t2" class="panel"><div class="wrap"><table>
-    <thead><tr><th>Date</th><th>User ID</th><th>MAC</th><th>Hostname</th><th class="num">Up MB</th><th class="num">Down MB</th><th class="num">Total MB</th><th>Basis</th><th>Users logged in that day</th></tr></thead>
+  <div id="x-t" class="vpanel"><div class="wrap"><table>
+    <thead><tr><th>MAC / ID</th><th>Hostname</th><th class="num u">Upload MB</th><th class="num d">Download MB</th><th class="num">Total MB</th><th>Note</th></tr></thead>
+    <tbody>{% for r in unmatched %}<tr class="unm"><td>{{ r.mac }}</td><td>{{ r.name }}</td><td class="num">{{ '{:,.2f}'.format(r.up) }}</td><td class="num">{{ '{:,.2f}'.format(r.down) }}</td><td class="num">{{ '{:,.2f}'.format(r.tot) }}</td><td>{{ r.note }}</td></tr>{% endfor %}</tbody>
+  </table></div></div>
+  <div id="u-d" class="vpanel"><div class="wrap"><table>
+    <thead><tr><th>User ID</th>{% for d in days %}<th class="num">{{ d.strftime('%d %b') }}</th>{% endfor %}<th class="num u">Upload MB</th><th class="num d">Download MB</th><th class="num">Total MB</th><th class="num">GB</th><th class="num">Days</th><th class="num">Devices</th><th>MACs (hostname)</th></tr></thead>
+    <tbody>{% for r in pivot %}<tr><td>{{ r.user }}</td>{% for d in days %}{{ dc(r.per[d], r.per_up[d], r.per_down[d]) }}{% endfor %}
+      <td class="num">{{ '{:,.2f}'.format(r.up) }}</td><td class="num">{{ '{:,.2f}'.format(r.down) }}</td><td class="num"><b>{{ '{:,.2f}'.format(r.total) }}</b></td><td class="num">{{ r.gb }}</td><td class="num">{{ r.days_active }}</td><td class="num">{{ r.macs|length }}</td><td>{{ r.devs|join(', ') }}</td></tr>{% endfor %}</tbody>
+  </table></div></div>
+  <div id="d-d" class="vpanel"><div class="wrap"><table>
+    <thead><tr><th>MAC</th><th>Hostname</th><th>User ID</th>{% for d in days %}<th class="num">{{ d.strftime('%d %b') }}</th>{% endfor %}<th class="num u">Upload MB</th><th class="num d">Download MB</th><th class="num">Total MB</th><th class="num">GB</th><th class="num">Days</th></tr></thead>
+    <tbody>{% for r in devpivot %}<tr class="{{ '' if r.users else 'unm' }}"><td>{{ r.mac }}</td><td>{{ r.name }}</td><td>{{ r.users|join(', ') or '—' }}</td>{% for d in days %}{{ dc(r.per[d], r.per_up[d], r.per_down[d]) }}{% endfor %}
+      <td class="num">{{ '{:,.2f}'.format(r.up) }}</td><td class="num">{{ '{:,.2f}'.format(r.down) }}</td><td class="num"><b>{{ '{:,.2f}'.format(r.total) }}</b></td><td class="num">{{ r.gb }}</td><td class="num">{{ r.days_active }}</td></tr>{% endfor %}</tbody>
+  </table></div></div>
+  <div id="det" class="vpanel"><div class="wrap"><table>
+    <thead><tr><th>Date</th><th>User ID</th><th>MAC</th><th>Hostname</th><th class="num u">Upload MB</th><th class="num d">Download MB</th><th class="num">Total MB</th><th>Basis</th><th>Users logged in that day</th></tr></thead>
     <tbody>{% for r in detail %}<tr class="{{ '' if r.user else 'unm' }}"><td>{{ r.day }}</td><td>{{ r.user or '—' }}</td><td>{{ r.mac }}</td><td>{{ r.name }}</td>
       <td class="num">{{ '{:,.2f}'.format(r.up) }}</td><td class="num">{{ '{:,.2f}'.format(r.down) }}</td><td class="num">{{ '{:,.2f}'.format(r.tot) }}</td>
       <td>{% if r.basis == 'login' %}Login same day{% elif r.basis == 'carried' %}Carried over{% elif r.basis == 'inferred' %}Inferred from next login{% elif r.is_mac %}No login{% else %}Not a MAC{% endif %}</td><td>{{ r.seen }}</td></tr>{% endfor %}</tbody>
   </table></div></div>
+  </div>
 </div>
+<script>
+(function(){
+  const card=document.getElementById('vr'), body=document.getElementById('vbody'), q=document.getElementById('vq');
+  const last={total:'u-t',day:'u-d'}; let view=card.dataset.view==='day'?'day':'total', tab=last[view], metric='tot';
+  function qs(s){return [...document.querySelectorAll(s)]}
+  function render(){
+    qs('.vtabs').forEach(g=>{g.style.display=g.dataset.v===view?'flex':'none'; g.querySelectorAll('a').forEach(a=>a.classList.toggle('on',a.dataset.t===tab));});
+    qs('.vpanel').forEach(p=>p.classList.toggle('on',p.id===tab));
+    document.getElementById('metricrow').classList.toggle('hide',!(view==='day'&&tab!=='det'));
+    body.className='metric-'+metric;
+    qs('#view button').forEach(b=>b.classList.toggle('on',b.dataset.v===view));
+    qs('#metric button').forEach(b=>b.classList.toggle('on',b.dataset.m===metric));
+    qs('input[name=view]').forEach(i=>i.value=view);
+    qs('#dl1').forEach(b=>b.textContent='Download Excel ('+(view==='total'?'total period':'day wise')+')');
+    qs('#dl2').forEach(b=>b.textContent='Download per device ('+(view==='total'?'period':'day wise')+')');
+    qs('.vpanel.on tbody tr').forEach(tr=>tr.style.display=!q.value||tr.textContent.toLowerCase().includes(q.value.toLowerCase())?'':'none');
+  }
+  qs('.vtabs a').forEach(a=>a.onclick=()=>{tab=a.dataset.t;last[view]=tab;render()});
+  qs('#view button').forEach(b=>b.onclick=()=>{view=b.dataset.v;tab=last[view];try{const u=new URL(location);u.searchParams.set('view',view);history.replaceState(null,'',u)}catch(e){};render()});
+  qs('#metric button').forEach(b=>b.onclick=()=>{metric=b.dataset.m;render()});
+  q.oninput=render; render();
+})();
+</script>

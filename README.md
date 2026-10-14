@@ -6,6 +6,7 @@ with a **per-device usage report** (.csv, "usage per MAC") and produces one list
 
 ## Features
 - **Ongoing tracking (Import / Report pages)**: upload event-log exports and daily usage CSVs whenever you have them — stored in SQLite (`data/peplink.db`). Overlapping event-log exports are deduplicated (one row per login); re-importing a day's usage replaces it. Multiple sites/vessels supported (site read from file name, e.g. `SITE1`). Report page: pick a date range → per-user-per-day pivot, device-day detail, Excel download. Import page shows days loaded, gaps, and event-log coverage.
+- **Total period / day wise**: the Report page (and Quick merge with several daily files) opens on **Total period** — one row per user and per device for the whole range — and switches to **Day wise** (one column per day, with a Total / Upload / Download / Upload-Download selector). Upload and download are shown next to the total everywhere, with GB uploaded / downloaded tiles. The Excel buttons follow the view (total-period workbook, or a day-wise workbook with Total, Upload and Download sheets); the view is kept in the address (`?view=day`).
 - **Per device per day**: the report's *Per device per day* tab and Excel sheet list every device (MAC, hostname, attributed user(s)) with its usage for each day.
 - **Per-day mode**: upload several daily *Top client usage* exports (date taken from the file name) → usage per user **per day**, pivot sheet + device-day detail. Each device-day is attributed to the account that logged in on that device that day (most logins wins); if nobody logged in that day, the last earlier login is carried over and marked as such; if the event log only starts after that day (the portal export is capped at 10,000 rows), the next known login is used and marked *Inferred*
 - Upload both files in the browser → on-screen preview (sortable, filterable) or Excel download
@@ -42,13 +43,28 @@ chmod 600 .env && cat .env        # note the generated password, then: docker co
 ## Data
 `data/peplink.db` holds everything imported. The compose file mounts `./data` so it survives rebuilds; back it up with your other SQLite DBs.
 
-## Run with Docker
-```bash
-cd peplink-usage-tracker          # the folder containing docker-compose.yml
-cp .env.example .env              # then set ADMIN_PASSWORD (see Configuration)
-docker compose up -d --build
-```
-Open `http://<your-host>:5020`. To update after pulling new code, run `docker compose up -d --build` again; `data/` and `.env` are untouched.
+## Download and install
+
+**Requirements:** Docker with Docker Compose (recommended), or Python 3.10+ to run without Docker.
+
+1. **Download** the code - either clone it (`git clone <repository-url>`) or use the repository's *Code → Download ZIP* button and unzip it.
+2. **Configure** (once). In the project folder, copy the example settings and choose a password:
+   ```bash
+   cd peplink-usage-tracker           # the folder that contains docker-compose.yml
+   cp .env.example .env
+   ```
+   Edit `.env` and set `ADMIN_PASSWORD` (required - the app stays locked while it is empty). Optionally set `ADMIN_USERNAME`, extra accounts in `ADMIN_USERS`, and `SECRET_KEY` (see *Configuration* above).
+3. **Start**:
+   ```bash
+   docker compose up -d --build
+   ```
+4. **Open** `http://localhost:5020` (or `http://<your-host>:5020` from another machine) and sign in with the user name and password from `.env`.
+5. **Use it**: *Import* your event-log `.xlsx` and daily usage `.csv` exports, then open *Report*. Imported data is kept in `./data` and survives restarts and rebuilds.
+
+**Update:** download or pull the newer version, then run `docker compose up -d --build` again; `data/` and `.env` are untouched.
+**Stop:** `docker compose down`. **Logs:** `docker compose logs -f`. **Health check:** `http://localhost:5020/health`.
+
+No Docker? See *Run locally without Docker* below.
 
 ## Run locally without Docker
 ```bash
@@ -61,10 +77,11 @@ ADMIN_PASSWORD=test python app/app.py     # http://localhost:5020  (Windows Powe
 python app/app.py merge "SITE1 - Starlink event log.xlsx" "SITE1 usage.csv" -o SITE1_usage.xlsx   # one-off totals
 python app/app.py merge "SITE1 - Starlink event log.xlsx" SITE1_top_client_usage_2026-10-0*.csv            # one-off per-day
 python app/app.py import *_SITE1_-_Starlink_*.csv "SITE1 - Starlink event log.xlsx"                         # into the store
-python app/app.py report --site SITE1 --start 2026-10-03 --end 2026-10-09 -o SITE1_week.xlsx
+python app/app.py report --view day --site SITE1 --start 2026-10-03 --end 2026-10-09 -o SITE1_week.xlsx
 ```
 
 ## Changelog
+- **v1.7.0** (2026-10-14) — Report: **Total period** (default) and **Day wise** views; **upload and download** columns next to total in every table, per-user, per-device and unmatched, plus GB uploaded / downloaded tiles; day columns can show Total, Upload, Download or both; Excel follows the view (total-period workbook; day-wise workbook with Upload and Download sheets; *Download per device* follows the view too); CLI `report --view total|day` (default total). Page footer credit. No schema or config change.
 - **v1.6.4** (2026-10-14) — Docs only: deployment notes and examples updated. No code, schema or config change.
 - **v1.6.2** (2026-10-12) — **Download per device**: a separate one-sheet Excel of the per-device view, as a button on the Report page (per device per day), the 7-day/period page and Quick merge. The existing *Download Excel* is unchanged. No schema or config change.
 - **v1.6.1** (2026-10-12) — 7-day/period page: new **Per device** tab (MAC, hostname, user, upload/download/total, GB, basis) and a matching *Usage per device* sheet first in the period Excel. No schema or config change.

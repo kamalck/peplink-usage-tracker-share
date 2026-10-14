@@ -81,6 +81,7 @@ python app/app.py report --view day --site SITE1 --start 2026-10-03 --end 2026-1
 ```
 
 ## Changelog
+- **v1.7.3** (2026-10-14) — Server request timeout lowered from 300 s to 120 s (gunicorn `--timeout` in the `Dockerfile`; measured imports and reports take under 2 s, so a stuck request is now cut off sooner). **Dockerfile changed** - rebuild required. No schema or config change.
 - **v1.7.2** (2026-10-14) — *MACs (hostname)* is now the last column of the per-user tables (report, 7-day page, Quick merge) and of the *Usage per user* Excel sheets. No schema or config change.
 - **v1.7.1** (2026-10-14) — 7-day/period page (and single-file Quick merge) now match the report: Per user / Per device / Unmatched tabs with upload and download, bars, TOTAL rows, GB uploaded / downloaded / unmatched tiles; the period Excel's *Usage per user* and *Unmatched devices* sheets gain Upload and Download columns. **Fix:** the period page's *Download Excel* failed with an error since v1.6.2. No schema or config change.
 - **v1.7.0** (2026-10-14) — Report: **Total period** (default) and **Day wise** views; **upload and download** columns next to total in every table, per-user, per-device and unmatched, plus GB uploaded / downloaded tiles; day columns can show Total, Upload, Download or both; Excel follows the view (total-period workbook; day-wise workbook with Upload and Download sheets; *Download per device* follows the view too); CLI `report --view total|day` (default total). Page footer credit. No schema or config change.

@@ -17,10 +17,10 @@
   <div class="tools"><input id="q" placeholder="Filter (user, MAC, hostname)…"><small>click a header to sort</small></div>
 
   <div id="t2" class="panel active"><div class="wrap"><table>
-    <thead><tr><th>User ID</th><th class="num">Devices</th><th>MACs (hostname)</th><th class="num u">Upload MB</th><th class="num d">Download MB</th><th class="num">Total MB</th><th class="num">GB</th><th>Up / Down</th></tr></thead>
-    <tbody>{% for u,p in per_user.items() %}<tr><td>{{ u }}</td><td class="num">{{ p.macs|length }}</td><td>{{ p.devs|join(', ') }}</td>
-      <td class="num">{{ '{:,.2f}'.format(p.up) }}</td><td class="num">{{ '{:,.2f}'.format(p.down) }}</td><td class="num"><b>{{ '{:,.2f}'.format(p.tot) }}</b></td><td class="num">{{ '{:,.2f}'.format(p.tot/1024) }}</td><td>{{ bar(p.up, p.down, umx) }}</td></tr>{% endfor %}</tbody>
-    <tfoot><tr><td>TOTAL</td><td></td><td></td><td class="num">{{ '{:,.2f}'.format(per_user.values()|sum(attribute='up')) }}</td><td class="num">{{ '{:,.2f}'.format(per_user.values()|sum(attribute='down')) }}</td><td class="num">{{ '{:,.2f}'.format(per_user.values()|sum(attribute='tot')) }}</td><td class="num">{{ '{:,.2f}'.format((per_user.values()|sum(attribute='tot')) / 1024) }}</td><td></td></tr></tfoot>
+    <thead><tr><th>User ID</th><th class="num">Devices</th><th class="num u">Upload MB</th><th class="num d">Download MB</th><th class="num">Total MB</th><th class="num">GB</th><th>Up / Down</th><th>MACs (hostname)</th></tr></thead>
+    <tbody>{% for u,p in per_user.items() %}<tr><td>{{ u }}</td><td class="num">{{ p.macs|length }}</td>
+      <td class="num">{{ '{:,.2f}'.format(p.up) }}</td><td class="num">{{ '{:,.2f}'.format(p.down) }}</td><td class="num"><b>{{ '{:,.2f}'.format(p.tot) }}</b></td><td class="num">{{ '{:,.2f}'.format(p.tot/1024) }}</td><td>{{ bar(p.up, p.down, umx) }}</td><td>{{ p.devs|join(', ') }}</td></tr>{% endfor %}</tbody>
+    <tfoot><tr><td>TOTAL</td><td></td><td class="num">{{ '{:,.2f}'.format(per_user.values()|sum(attribute='up')) }}</td><td class="num">{{ '{:,.2f}'.format(per_user.values()|sum(attribute='down')) }}</td><td class="num">{{ '{:,.2f}'.format(per_user.values()|sum(attribute='tot')) }}</td><td class="num">{{ '{:,.2f}'.format((per_user.values()|sum(attribute='tot')) / 1024) }}</td><td></td><td></td></tr></tfoot>
   </table></div></div>
 
   <div id="t1" class="panel"><div class="wrap"><table>

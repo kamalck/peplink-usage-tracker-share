@@ -334,11 +334,11 @@ def build_total_xlsx(detail, pivot_rows, days):
     wb = openpyxl.Workbook()
     s = wb.active
     s.title = 'Usage per user'
-    s.append(['User ID', 'No. of devices', 'MACs (hostname)', 'Upload (MB)', 'Download (MB)', 'Total (MB)', 'Total (GB)'])
+    s.append(['User ID', 'No. of devices', 'Upload (MB)', 'Download (MB)', 'Total (MB)', 'Total (GB)', 'MACs (hostname)'])
     for r in pivot_rows:
-        s.append([r['user'], len(r['macs']), ', '.join(r['devs']), r['up'], r['down'], r['total'], r['gb']])
-    s.append(['TOTAL', '', '', round(sum(r['up'] for r in pivot_rows), 2), round(sum(r['down'] for r in pivot_rows), 2),
-              round(sum(r['total'] for r in pivot_rows), 2), round(sum(r['total'] for r in pivot_rows) / 1024, 2)])
+        s.append([r['user'], len(r['macs']), r['up'], r['down'], r['total'], r['gb'], ', '.join(r['devs'])])
+    s.append(['TOTAL', '', round(sum(r['up'] for r in pivot_rows), 2), round(sum(r['down'] for r in pivot_rows), 2),
+              round(sum(r['total'] for r in pivot_rows), 2), round(sum(r['total'] for r in pivot_rows) / 1024, 2), ''])
     for c in s[s.max_row]:
         c.font = Font(bold=True)
     _fill_total_device_sheet(wb.create_sheet('Usage per device'), device_pivot(detail, days))

@@ -137,9 +137,9 @@ def build_xlsx(rows, per_user, unmatched):
         s.append([r['user'], r['mac'], r['name'], r['up'], r['down'], r['tot'], r['gb'], r['pct'],
                   r['logins'], r['users'], r['last_user'], r['last_time']])
     s2 = out.create_sheet('Usage per user')
-    s2.append(['User ID', 'Devices (MAC (hostname))', 'No. of devices', 'Upload (MB)', 'Download (MB)', 'Total (MB)', 'Total (GB)'])
+    s2.append(['User ID', 'No. of devices', 'Upload (MB)', 'Download (MB)', 'Total (MB)', 'Total (GB)', 'Devices (MAC (hostname))'])
     for u, p in per_user.items():
-        s2.append([u, ', '.join(p['devs']), len(p['macs']), round(p['up'], 2), round(p['down'], 2), round(p['tot'], 2), round(p['tot'] / 1024, 2)])
+        s2.append([u, len(p['macs']), round(p['up'], 2), round(p['down'], 2), round(p['tot'], 2), round(p['tot'] / 1024, 2), ', '.join(p['devs'])])
     s3 = out.create_sheet('Unmatched devices')
     s3.append(['MAC address', 'Hostname', 'Upload (MB)', 'Download (MB)', 'Total (MB)', 'Note'])
     for r in unmatched:

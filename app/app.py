@@ -5,7 +5,7 @@ from merge import merge, build_xlsx
 from daily import merge_daily, build_daily_xlsx, compute, compute_period, device_pivot, build_period_xlsx, build_device_xlsx, build_period_device_xlsx, build_total_xlsx, unmatched_devices
 import store
 
-VERSION = '1.7.3'
+VERSION = '1.7.4'
 
 
 def _secret_key():

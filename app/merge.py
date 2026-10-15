@@ -141,9 +141,9 @@ def build_xlsx(rows, per_user, unmatched):
     for u, p in per_user.items():
         s2.append([u, len(p['macs']), round(p['up'], 2), round(p['down'], 2), round(p['tot'], 2), round(p['tot'] / 1024, 2), ', '.join(p['devs'])])
     s3 = out.create_sheet('Unmatched devices')
-    s3.append(['MAC address', 'Hostname', 'Upload (MB)', 'Download (MB)', 'Total (MB)', 'Note'])
+    s3.append(['MAC address', 'Hostname', 'Upload (MB)', 'Download (MB)', 'Total (MB)', 'Upload (GB)', 'Download (GB)', 'Total (GB)', 'Note'])
     for r in unmatched:
-        s3.append([r['mac'], r['name'], r['up'], r['down'], r['tot'], 'No login found' if r['is_mac'] else 'Not a MAC (IP / non-portal traffic)'])
+        s3.append([r['mac'], r['name'], r['up'], r['down'], r['tot'], round(r['up'] / 1024, 2), round(r['down'] / 1024, 2), round(r['tot'] / 1024, 2), 'No login found' if r['is_mac'] else 'Not a MAC (IP / non-portal traffic)'])
     for sh in out:
         for c in sh[1]:
             c.font = Font(bold=True, color='FFFFFF')

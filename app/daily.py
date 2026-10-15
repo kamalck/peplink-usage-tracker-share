@@ -343,9 +343,9 @@ def build_total_xlsx(detail, pivot_rows, days):
         c.font = Font(bold=True)
     _fill_total_device_sheet(wb.create_sheet('Usage per device'), device_pivot(detail, days))
     u = wb.create_sheet('Unmatched')
-    u.append(['MAC / ID', 'Hostname', 'Upload (MB)', 'Download (MB)', 'Total (MB)', 'Note'])
+    u.append(['MAC / ID', 'Hostname', 'Upload (MB)', 'Download (MB)', 'Total (MB)', 'Upload (GB)', 'Download (GB)', 'Total (GB)', 'Note'])
     for r in unmatched_devices(detail):
-        u.append([r['mac'], r['name'], r['up'], r['down'], r['tot'], r['note']])
+        u.append([r['mac'], r['name'], r['up'], r['down'], r['tot'], round(r['up'] / 1024, 2), round(r['down'] / 1024, 2), r['gb'], r['note']])
     return _save(wb)
 
 
@@ -365,8 +365,8 @@ def build_daily_xlsx(detail, pivot_rows, days):
                    {'login': 'Login same day', 'carried': 'Carried from earlier login', 'inferred': 'Inferred from next login (log starts later)', '': ('No login found' if r['is_mac'] else 'Not a MAC')}[r['basis']],
                    r['seen']])
     s3 = wb.create_sheet('Unmatched')
-    s3.append(['Date', 'MAC / ID', 'Hostname', 'Upload (MB)', 'Download (MB)', 'Total (MB)', 'Note'])
+    s3.append(['Date', 'MAC / ID', 'Hostname', 'Upload (MB)', 'Download (MB)', 'Total (MB)', 'Upload (GB)', 'Download (GB)', 'Total (GB)', 'Note'])
     for r in detail:
         if not r['user']:
-            s3.append([r['day'].isoformat(), r['mac'], r['name'], r['up'], r['down'], r['tot'], 'No login found' if r['is_mac'] else 'Not a MAC (IP / non-portal traffic)'])
+            s3.append([r['day'].isoformat(), r['mac'], r['name'], r['up'], r['down'], r['tot'], round(r['up'] / 1024, 2), round(r['down'] / 1024, 2), round(r['tot'] / 1024, 2), 'No login found' if r['is_mac'] else 'Not a MAC (IP / non-portal traffic)'])
     return _save(wb)

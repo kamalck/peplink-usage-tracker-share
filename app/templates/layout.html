@@ -9,50 +9,22 @@
 <link rel="stylesheet" href="{{ url_for('static', filename='kck-ui/kck-ui.css') }}">
 <script src="{{ url_for('static', filename='kck-ui/kck-ui.js') }}"></script>
 <style>
-  /* Colours come from the shared kit (static/kck-ui, loaded above). The names below are this app's older ones, now
-     aliases of kit tokens, so Light/Dark and every colour theme work. Do not hard-code colours in this file. */
-  :root{--card:var(--panel);--ink:var(--text);--accent:var(--brand);--accent2:var(--brand-ink)}
-  *{box-sizing:border-box}
-  body{margin:0;font:14px/1.45 system-ui,Segoe UI,Roboto,sans-serif;background:var(--bg);color:var(--ink)}
-  a{color:var(--accent2)}
-  header{background:var(--accent);color:var(--on-brand);padding:12px 10px;display:flex;align-items:center;gap:12px;flex-wrap:wrap}
+  /* Buttons, text boxes, tables, panels, stat tiles, tabs, the segmented control, messages and tags come from the shared kit
+     (static/kck-ui, loaded above): use its class names (.btn, table.grid, .field, .card, .stat, .tabs, .seg, .flash, .tag, .pill).
+     Only this app's own layout and components are below. Colours: kit tokens only, never hard-coded. */
+  body{margin:0;font:14px/1.45 var(--font);background:var(--bg);color:var(--text)}
+  a{color:var(--brand-ink)}
+  header{background:var(--brand);color:var(--on-brand);padding:12px 10px;display:flex;align-items:center;gap:12px;flex-wrap:wrap}
   header h1{margin:0;font-size:18px;font-weight:600}
   header span{opacity:.75;font-size:13px}
   main{max-width:none;margin:10px 0;padding:0 8px}
-  .card{background:var(--card);border:1px solid var(--line);border-radius:8px;padding:14px;margin-bottom:10px}
-  .grid{display:grid;grid-template-columns:1fr 1fr;gap:16px}
-  label{display:block;font-weight:600;margin-bottom:6px}
-  small{color:var(--muted)}
-  input[type=file]{width:100%;padding:10px;border:1px dashed var(--line-strong);border-radius:6px;background:var(--hover);color:var(--ink)}
-  .actions{margin-top:16px;display:flex;gap:10px;flex-wrap:wrap}
-  button{padding:9px 18px;border-radius:6px;border:1px solid var(--accent);background:var(--accent);color:var(--on-brand);font-weight:600;cursor:pointer}
-  button:hover{background:var(--brand-hover);border-color:var(--brand-hover)}
-  button.secondary{background:var(--panel);color:var(--accent2);border-color:var(--accent2)}
-  button.secondary:hover{background:var(--brand-soft)}
-  button.danger{background:var(--bad);border-color:var(--bad);color:var(--panel)}
-  button.danger:hover{background:var(--bad);border-color:var(--bad);filter:brightness(.92)}
-  .flash{background:var(--bad-bg);color:var(--bad);border:1px solid var(--bad);padding:10px 14px;border-radius:6px;margin-bottom:16px}
-  .stats{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:12px;margin-bottom:20px}
-  .stat{background:var(--card);border:1px solid var(--line);border-radius:8px;padding:14px}
-  .stat b{display:block;font-size:22px;color:var(--accent2)}
-  .stat span{color:var(--muted);font-size:12px}
-  .tabs{display:flex;gap:4px;border-bottom:1px solid var(--line);margin-bottom:12px}
-  .tabs a{padding:8px 14px;text-decoration:none;color:var(--muted);border-bottom:2px solid transparent;cursor:pointer}
-  .tabs a.active{color:var(--accent2);border-color:var(--accent2);font-weight:600}
-  .panel{display:none}.panel.active{display:block}
-  .tools{display:flex;gap:10px;margin-bottom:10px;align-items:center;flex-wrap:wrap}
-  .tools input{padding:7px 10px;border:1px solid var(--line-strong);border-radius:6px;width:280px;max-width:100%;background:var(--panel);color:var(--ink)}
-  table{width:100%;border-collapse:collapse;font-size:13px}
-  th,td{padding:7px 9px;border-bottom:1px solid var(--line);text-align:left;white-space:nowrap}
-  th{background:var(--raised);position:sticky;top:0;cursor:pointer;user-select:none}
-  td.num,th.num{text-align:right;font-variant-numeric:tabular-nums}
-  tr.unm td:first-child{color:var(--warn);font-style:italic}
-  .wrap{overflow:auto;max-height:70vh;border:1px solid var(--line);border-radius:6px}
+  footer{text-align:center;color:var(--muted);font-size:12px;padding:14px 8px 18px}
   code{background:var(--raised);padding:1px 5px;border-radius:4px}
-  ::placeholder{color:var(--muted);opacity:.8}
-</style>
+  pre{background:var(--raised);padding:10px;border-radius:var(--r-sm);overflow-x:auto}
+  .hide{display:none!important}
+  .mt{margin-top:12px}
 
-<style>
+  /* header nav (white-on-brand text buttons, not kit buttons) */
   nav{display:flex;gap:4px;margin-left:auto;align-items:center;flex-wrap:wrap}
   nav form{display:flex;margin:0}
   nav button.navbtn{background:transparent;border:0;border-radius:6px;color:var(--on-brand);opacity:.8;padding:6px 12px;font:inherit;font-weight:400;line-height:inherit;cursor:pointer}
@@ -64,40 +36,38 @@
   nav .pal__dot:hover{border-color:var(--on-brand)}
   nav .pal__dot[aria-pressed="true"]{border-color:var(--on-brand)}
   nav .pal__dot:focus-visible{outline-color:var(--on-brand)}
-  .row{display:flex;gap:12px;align-items:end;flex-wrap:wrap}
-  .row label{margin:0}
-  input[type=text],input[type=password],input[type=date],select{padding:8px 10px;border:1px solid var(--line-strong);border-radius:6px;font:inherit;background:var(--panel);color:var(--ink)}
-  .muted{color:var(--muted)}
-  ul.msgs{margin:0 0 16px;padding:0;list-style:none}
-  ul.msgs li{background:var(--ok-bg);color:var(--ok);border:1px solid var(--ok);padding:8px 12px;border-radius:6px;margin-bottom:6px;font-size:13px}
-  ul.msgs li.err{background:var(--bad-bg);color:var(--bad);border-color:var(--bad)}
-  .badge{display:inline-block;background:var(--raised);color:var(--ink);border-radius:4px;padding:2px 7px;font-size:12px;margin:2px}
-  a.badge{color:var(--accent2)}
-  .badge.gap{background:var(--bad-bg);color:var(--bad)}
-  .seg{display:inline-flex;border:1px solid var(--accent2);border-radius:6px;overflow:hidden}
-  .seg button{border:0;border-radius:0;background:var(--panel);color:var(--accent2);padding:9px 16px}
-  .seg button:hover{background:var(--brand-soft)}
-  .seg button.on,.seg button.on:hover{background:var(--accent);color:var(--on-brand)}
-  .seg.small button{padding:5px 11px;font-weight:500}
-  .vtabs{display:flex;gap:4px;border-bottom:1px solid var(--line);margin-bottom:12px}
-  .vtabs a{padding:8px 14px;color:var(--muted);border-bottom:2px solid transparent;cursor:pointer;text-decoration:none}
-  .vtabs a.on{color:var(--accent2);border-color:var(--accent2);font-weight:600}
-  .vpanel{display:none}.vpanel.on{display:block}
-  footer{text-align:center;color:var(--muted);font-size:12px;padding:14px 8px 18px}
-  .hide{display:none}
+
+  /* spacing between kit surfaces and small layout helpers for kit components */
+  .card{margin-bottom:12px}
+  .stats{margin-bottom:12px}
+  .card>.tabs{margin-bottom:12px}
+  .row{display:flex;gap:12px;align-items:flex-end;flex-wrap:wrap}
+  .row>.field{margin-bottom:0}
+  .row>.grow{flex:1 1 260px}
+  .field .hint{margin-top:5px}
+  .toolbar input{width:280px;max-width:100%}
+  .chips{display:flex;flex-wrap:wrap;gap:6px;align-items:center}
+  .chips+.chips{margin-top:8px}
+  input[type=file]{width:100%;padding:10px;border:1px dashed var(--line-strong);border-radius:var(--r-md);background:var(--hover);color:var(--text)}
+  .pane{display:none}.pane.on{display:block}
+
+  /* tables: kit table.grid, plus this app's sticky + sortable header, no wrapping, totals row, unmatched rows */
+  .table-wrap.scroll{overflow:auto;max-height:70vh}
+  table.grid th,table.grid td{white-space:nowrap}
+  table.grid thead th{position:sticky;top:0;z-index:1;cursor:pointer;user-select:none}
+  table.grid tfoot td{font-weight:700;background:var(--hover)}
+  table.grid tr.unm td:first-child{color:var(--warn);font-style:italic}
+  #metricrow{display:inline-flex;flex-wrap:wrap;align-items:center;gap:8px;margin-left:8px;max-width:100%;min-width:0}
+  .seg{max-width:100%;overflow-x:auto}
+
+  /* views: show only the metric chosen in the Day-columns switch */
   .metric-tot .m-up,.metric-tot .m-down,.metric-tot .m-both,.metric-up .m-tot,.metric-up .m-down,.metric-up .m-both,
   .metric-down .m-tot,.metric-down .m-up,.metric-down .m-both,.metric-both .m-tot,.metric-both .m-up,.metric-both .m-down{display:none}
   /* upload = info colour, download = ok colour, in every colour theme (never the brand colour) */
-  th.u{color:var(--info)}th.d{color:var(--ok)}tfoot td{font-weight:700;background:var(--hover)}
+  table.grid th.u{color:var(--info)}table.grid th.d{color:var(--ok)}
   .stat.up b{color:var(--info)}.stat.down b{color:var(--ok)}
   .bar{display:inline-block;height:8px;border-radius:2px;vertical-align:middle}
   .bar.u{background:var(--info)}.bar.d{background:var(--ok)}
-  /* Phase 1 compat: switch off kit component looks this app does not use yet (Phase 2 adopts them) */
-  .card,.stat{box-shadow:none}.card+.card{margin-top:0}
-  .seg{padding:0;background:none}
-  .badge{height:auto;gap:0;font-weight:400}.badge::before{display:none}
-  .tabs{gap:4px}.tabs a{margin-bottom:0;font-weight:400}.tabs a.active{font-weight:600}
-  .tabs,.vtabs{overflow-x:auto}.tabs a,.vtabs a{white-space:nowrap}
 </style>
 </head>
 <body>
@@ -106,14 +76,12 @@
 <button type="button" class="navbtn" data-kck-theme-cycle title="Auto / Light / Dark">Theme</button><div data-kck-palettes></div>
 {% if session.get('auth') %}<form method="post" action="{{ url_for('logout') }}"><input type="hidden" name="_csrf" value="{{ csrf_token() }}"><button class="navbtn">Sign out{% if session.get('user') %} ({{ session.get('user') }}){% endif %}</button></form>{% endif %}</nav></header>
 <main>
-{% with msgs = get_flashed_messages() %}{% if msgs %}<ul class="msgs">{% for m in msgs %}<li class="{{ 'err' if 'ERROR' in m or 'skipped' in m or 'No ' in m }}">{{ m }}</li>{% endfor %}</ul>{% endif %}{% endwith %}
+{% with msgs = get_flashed_messages() %}{% for m in msgs %}<div class="flash {{ 'error' if 'ERROR' in m or 'skipped' in m or 'No ' in m else 'success' }}">{{ m }}</div>{% endfor %}{% endwith %}
 {% block content %}{% endblock %}
 </main>
 <footer>Concept by KCK · Coded with Claude (AI)</footer>
 <script>
 (function(){var m=document.querySelector('meta[name=theme-color]');function t(){try{var c=getComputedStyle(document.documentElement).getPropertyValue('--brand').trim();if(m&&c)m.content=c}catch(e){}}t();document.addEventListener('kck:change',t);})();
-document.querySelectorAll('.tabs a').forEach(a=>a.onclick=()=>{document.querySelectorAll('.tabs a,.panel').forEach(e=>e.classList.remove('active'));a.classList.add('active');document.getElementById(a.dataset.t).classList.add('active');});
-const q=document.getElementById('q'); if(q) q.oninput=e=>{const v=e.target.value.toLowerCase();document.querySelectorAll('.panel.active tbody tr').forEach(tr=>tr.style.display=tr.textContent.toLowerCase().includes(v)?'':'none');};
 document.querySelectorAll('th').forEach(th=>th.onclick=()=>{const t=th.closest('table'),i=[...th.parentNode.children].indexOf(th),num=th.classList.contains('num'),asc=th.dataset.asc!=='1';th.dataset.asc=asc?'1':'0';
  const rows=[...t.tBodies[0].rows].sort((a,b)=>{let x=a.cells[i].textContent,y=b.cells[i].textContent;if(num){x=parseFloat(x.replace(/,/g,''))||0;y=parseFloat(y.replace(/,/g,''))||0;return asc?x-y:y-x}return asc?x.localeCompare(y):y.localeCompare(x)});rows.forEach(r=>t.tBodies[0].appendChild(r));});
 </script>

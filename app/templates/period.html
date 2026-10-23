@@ -1,7 +1,7 @@
 {% extends "layout.html" %}{% set nav="report" %}{% block subtitle %}{{ site }} — usage per user, {{ start }} → {{ end }}{% endblock %}{% block content %}
-<div class="card"><div class="row"><a href="{{ url_for('home', site=site) }}"><button type="button" class="secondary">← Import</button></a>
-<a href="{{ url_for('period', site=site, start=start, end=end, download=1) }}"><button type="button" class="secondary">Download Excel</button></a>
-<a href="{{ url_for('period', site=site, start=start, end=end, download='device') }}"><button type="button" class="secondary">Download per device</button></a></div>
-<small>One usage file for the whole period. Each device goes to the account with most logins inside the period; otherwise the last earlier login (carried) or next later login (inferred).</small></div>
+<div class="card"><div class="btn-row"><a class="btn secondary" href="{{ url_for('home', site=site) }}">← Import</a>
+<a class="btn secondary" href="{{ url_for('period', site=site, start=start, end=end, download=1) }}">Download Excel</a>
+<a class="btn secondary" href="{{ url_for('period', site=site, start=start, end=end, download='device') }}">Download per device</a></div>
+<div class="hint mt">One usage file for the whole period. Each device goes to the account with most logins inside the period; otherwise the last earlier login (carried) or next later login (inferred).</div></div>
 {% with period=True %}{% include '_total.html' %}{% endwith %}
 {% endblock %}

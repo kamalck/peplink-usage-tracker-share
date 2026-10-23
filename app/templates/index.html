@@ -1,27 +1,27 @@
 {% extends "layout.html" %}{% set nav="quick" %}{% block subtitle %}one-off merge, nothing stored{% endblock %}{% block content %}
 <form class="card" method="post" enctype="multipart/form-data" action="{{ url_for('quick') }}">
   <input type="hidden" name="_csrf" value="{{ csrf_token() }}">
-  <div class="grid">
-    <div>
+  <div class="form-grid">
+    <div class="field">
       <label>Starlink event log (.xlsx)</label>
       <input type="file" name="events" accept=".xlsx" required>
-      <small>Portal export with <code>Client MAC</code> and <code>Details</code> columns</small>
+      <div class="hint">Portal export with <code>Client MAC</code> and <code>Details</code> columns</div>
     </div>
-    <div>
+    <div class="field">
       <label>Usage per device (.csv) — one file, or several daily files</label>
       <input type="file" name="usage" accept=".csv" multiple required>
-      <small>One file → totals per user. Several daily exports (date in file name, e.g. <code>…_2026-10-05T00_00_00.csv</code>) → usage per user <b>per day</b></small>
+      <div class="hint">One file → totals per user. Several daily exports (date in file name, e.g. <code>…_2026-10-05T00_00_00.csv</code>) → usage per user <b>per day</b></div>
     </div>
   </div>
   <input type="hidden" name="view" value="{{ view|default('total') }}">
-  <div class="actions">
-    <button name="action" value="preview">Preview</button>
-    <button name="action" value="download" id="dl1" class="secondary">Download Excel</button>
-    <button name="action" value="download_device" id="dl2" class="secondary">Download per device</button>
+  <div class="btn-row">
+    <button class="btn" name="action" value="preview">Preview</button>
+    <button name="action" value="download" id="dl1" class="btn secondary">Download Excel</button>
+    <button name="action" value="download_device" id="dl2" class="btn secondary">Download per device</button>
   </div>
 </form>
 
-{% if mode == 'daily' %}<div class="card"><div class="row">{% include '_viewtoggle.html' %}<small>Total period is the default. The Excel buttons follow the view.</small></div></div>{% include '_daily.html' %}{% endif %}
+{% if mode == 'daily' %}<div class="card"><div class="row">{% include '_viewtoggle.html' %}<span class="hint">Total period is the default. The Excel buttons follow the view.</span></div></div>{% include '_daily.html' %}{% endif %}
 {% if mode == 'total' %}{% include '_total.html' %}{% endif %}
 
 {% endblock %}

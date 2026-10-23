@@ -2,21 +2,21 @@
 <form class="card" method="post" enctype="multipart/form-data" action="{{ url_for('do_import') }}">
   <input type="hidden" name="_csrf" value="{{ csrf_token() }}">
   <div class="row">
-    <div><label>Site</label><input type="text" name="site" value="{{ site }}" placeholder="auto from file name (e.g. SITE1)" list="sites"><datalist id="sites">{% for s in sites %}<option value="{{ s }}">{% endfor %}</datalist></div>
-    <div style="flex:1"><label>Files — event logs (.xlsx) and daily usage exports (.csv), any number, any order</label><input type="file" name="files" multiple required></div>
-    <div><label>Usage files are</label><select name="kind"><option value="daily" selected>Daily (1 day each)</option><option value="period">7-day / period total</option></select></div>
-    <div><label>Period start</label><input type="date" name="period_start"></div>
-    <button>Import</button>
+    <div class="field"><label>Site</label><input type="text" name="site" value="{{ site }}" placeholder="auto from file name (e.g. SITE1)" list="sites"><datalist id="sites">{% for s in sites %}<option value="{{ s }}">{% endfor %}</datalist></div>
+    <div class="field grow"><label>Files — event logs (.xlsx) and daily usage exports (.csv), any number, any order</label><input type="file" name="files" multiple required></div>
+    <div class="field"><label>Usage files are</label><select name="kind"><option value="daily" selected>Daily (1 day each)</option><option value="period">7-day / period total</option></select></div>
+    <div class="field"><label>Period start</label><input type="date" name="period_start"></div>
+    <button class="btn">Import</button>
   </div>
-  <small>Event logs may overlap (the portal exports 10,000 rows at a time) — only new logins are added. A daily usage file replaces any earlier import for the same site and day. A <b>7-day file</b> is one export covering a whole period: put both dates in the file name (<code>…_2026-10-03_2026-10-09.csv</code>) or pick the start date above (end = start + 6 days); it is stored as a period total, separate from the per-day report. Site is read from the file name (<code>…_SITE1_-_Starlink_…</code>) unless you type one.</small>
+  <div class="hint mt">Event logs may overlap (the portal exports 10,000 rows at a time) — only new logins are added. A daily usage file replaces any earlier import for the same site and day. A <b>7-day file</b> is one export covering a whole period: put both dates in the file name (<code>…_2026-10-03_2026-10-09.csv</code>) or pick the start date above (end = start + 6 days); it is stored as a period total, separate from the per-day report. Site is read from the file name (<code>…_SITE1_-_Starlink_…</code>) unless you type one.</div>
 </form>
 {% if overview %}
-<div class="card"><b>Sites — last entry added</b> <small>(click a site to show its import status below)</small>
-<div class="wrap" style="max-height:30vh;margin-top:8px"><table id="overview"><thead><tr><th>Site</th><th>Last entry added</th><th>Kind</th><th>File</th><th>Covers</th><th class="num">Rows</th><th>Latest usage day</th><th>Latest login</th></tr></thead>
-<tbody>{% for o in overview %}<tr data-site="{{ o.site }}" style="cursor:pointer" class="{{ 'sel' if o.site==site }}"><td><b>{{ o.site }}</b></td><td>{{ o.at or '—' }}</td><td>{{ o.kind }}</td><td>{{ o.file }}</td><td>{{ o.span }}</td><td class="num">{{ o.rows }}</td><td>{{ o.last_day or '—' }}</td><td>{{ o.last_login or '—' }}</td></tr>{% endfor %}</tbody></table></div></div>
+<div class="card"><b>Sites — last entry added</b> <span class="hint">(click a site to show its import status below)</span>
+<div class="table-wrap scroll mt" style="max-height:30vh"><table class="grid" id="overview"><thead><tr><th>Site</th><th>Last entry added</th><th>Kind</th><th>File</th><th>Covers</th><th class="num">Rows</th><th>Latest usage day</th><th>Latest login</th></tr></thead>
+<tbody>{% for o in overview %}<tr data-site="{{ o.site }}" class="{{ 'is-selected' if o.site==site }}"><td><b>{{ o.site }}</b></td><td>{{ o.at or '—' }}</td><td>{{ o.kind }}</td><td>{{ o.file }}</td><td>{{ o.span }}</td><td class="num">{{ o.rows }}</td><td>{{ o.last_day or '—' }}</td><td>{{ o.last_login or '—' }}</td></tr>{% endfor %}</tbody></table></div></div>
 {% endif %}
 <div id="sitepanel">{% include '_site_status.html' %}</div>
-<style>#overview tr.sel td{background:var(--brand-soft)}#overview tbody tr:hover td{background:var(--hover)}</style>
+<style>#overview tbody tr{cursor:pointer}</style>
 <script>
 (function(){
   const panel=document.getElementById('sitepanel'), inp=document.querySelector('input[name=site]');
@@ -29,7 +29,7 @@
       history.replaceState(null,'','{{ url_for("home") }}?site='+encodeURIComponent(site));
     }catch(e){location.href='{{ url_for("home") }}?site='+encodeURIComponent(site);return;}
     if(inp) inp.value=site;
-    document.querySelectorAll('#overview tbody tr').forEach(t=>t.classList.toggle('sel',t.dataset.site===site));
+    document.querySelectorAll('#overview tbody tr').forEach(t=>t.classList.toggle('is-selected',t.dataset.site===site));
   }
   document.querySelectorAll('#overview tbody tr').forEach(t=>t.onclick=()=>show(t.dataset.site));
   const known=[...document.querySelectorAll('#overview tbody tr')].map(t=>t.dataset.site);

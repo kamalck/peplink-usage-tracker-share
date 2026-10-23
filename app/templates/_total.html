@@ -11,19 +11,19 @@
   {% if summary.non_mac %}<div class="stat"><b>{{ summary.non_mac }}</b><span>IP-only rows (no MAC)</span></div>{% endif %}
 </div>
 <div class="card">
-  <div class="tabs">
-    <a class="active" data-t="t2">Per user</a><a data-t="t1">Per device</a><a data-t="t3">Unmatched ({{ unmatched|length }})</a>
+  <div class="tabs" id="ttabs">
+    <button type="button" class="is-active" data-t="t2">Per user</button><button type="button" data-t="t1">Per device</button><button type="button" data-t="t3">Unmatched ({{ unmatched|length }})</button>
   </div>
-  <div class="tools"><input id="q" placeholder="Filter (user, MAC, hostname)…"><small>click a header to sort</small></div>
+  <div class="toolbar"><input id="q" placeholder="Filter (user, MAC, hostname)…"><span class="hint">click a header to sort</span></div>
 
-  <div id="t2" class="panel active"><div class="wrap"><table>
+  <div id="t2" class="pane on"><div class="table-wrap scroll"><table class="grid">
     <thead><tr><th>User ID</th><th class="num">Devices</th><th class="num u">Upload MB</th><th class="num d">Download MB</th><th class="num">Total MB</th><th class="num">GB</th><th>Up / Down</th><th>MACs (hostname)</th></tr></thead>
     <tbody>{% for u,p in per_user.items() %}<tr><td>{{ u }}</td><td class="num">{{ p.macs|length }}</td>
       <td class="num">{{ '{:,.2f}'.format(p.up) }}</td><td class="num">{{ '{:,.2f}'.format(p.down) }}</td><td class="num"><b>{{ '{:,.2f}'.format(p.tot) }}</b></td><td class="num">{{ '{:,.2f}'.format(p.tot/1024) }}</td><td>{{ bar(p.up, p.down, umx) }}</td><td>{{ p.devs|join(', ') }}</td></tr>{% endfor %}</tbody>
     <tfoot><tr><td>TOTAL</td><td></td><td class="num">{{ '{:,.2f}'.format(per_user.values()|sum(attribute='up')) }}</td><td class="num">{{ '{:,.2f}'.format(per_user.values()|sum(attribute='down')) }}</td><td class="num">{{ '{:,.2f}'.format(per_user.values()|sum(attribute='tot')) }}</td><td class="num">{{ '{:,.2f}'.format((per_user.values()|sum(attribute='tot')) / 1024) }}</td><td></td><td></td></tr></tfoot>
   </table></div></div>
 
-  <div id="t1" class="panel"><div class="wrap"><table>
+  <div id="t1" class="pane"><div class="table-wrap scroll"><table class="grid">
     <thead><tr><th>MAC</th><th>Hostname</th><th>User ID</th><th class="num u">Upload MB</th><th class="num d">Download MB</th><th class="num">Total MB</th><th class="num">GB</th><th>Up / Down</th><th class="num">%</th>{% if period %}<th>Basis</th>{% endif %}<th class="num">Logins</th><th>All users seen</th><th>Last login</th><th>Time</th></tr></thead>
     <tbody>{% for r in rows %}<tr class="{{ '' if r.user else 'unm' }}"><td>{{ r.mac }}</td><td>{{ r.name }}</td><td>{{ r.user or '—' }}</td>
       <td class="num">{{ '{:,.2f}'.format(r.up) }}</td><td class="num">{{ '{:,.2f}'.format(r.down) }}</td><td class="num"><b>{{ '{:,.2f}'.format(r.tot) }}</b></td><td class="num">{{ r.gb }}</td><td>{{ bar(r.up, r.down, dmx) }}</td><td class="num">{{ r.pct }}</td>
@@ -32,8 +32,15 @@
     <tfoot><tr><td>TOTAL</td><td></td><td></td><td class="num">{{ '{:,.2f}'.format(rows|sum(attribute='up')) }}</td><td class="num">{{ '{:,.2f}'.format(rows|sum(attribute='down')) }}</td><td class="num">{{ '{:,.2f}'.format(rows|sum(attribute='tot')) }}</td><td class="num">{{ '{:,.2f}'.format((rows|sum(attribute='tot')) / 1024) }}</td><td></td><td></td>{% if period %}<td></td>{% endif %}<td></td><td></td><td></td><td></td></tr></tfoot>
   </table></div></div>
 
-  <div id="t3" class="panel"><div class="wrap"><table>
+  <div id="t3" class="pane"><div class="table-wrap scroll"><table class="grid">
     <thead><tr><th>MAC</th><th>Hostname</th><th class="num u">Upload MB</th><th class="num d">Download MB</th><th class="num">Total MB</th><th class="num u">Upload GB</th><th class="num d">Download GB</th><th class="num">Total GB</th><th>Note</th></tr></thead>
     <tbody>{% for r in unmatched %}<tr class="unm"><td>{{ r.mac }}</td><td>{{ r.name }}</td><td class="num">{{ '{:,.2f}'.format(r.up) }}</td><td class="num">{{ '{:,.2f}'.format(r.down) }}</td><td class="num">{{ '{:,.2f}'.format(r.tot) }}</td><td class="num">{{ '{:,.2f}'.format(r.up / 1024) }}</td><td class="num">{{ '{:,.2f}'.format(r.down / 1024) }}</td><td class="num"><b>{{ '{:,.2f}'.format(r.tot / 1024) }}</b></td><td>{{ 'No login found' if r.is_mac else 'Not a MAC (IP / non-portal traffic)' }}</td></tr>{% endfor %}</tbody>
   </table></div></div>
 </div>
+<script>
+(function(){
+  const tabs=[...document.querySelectorAll('#ttabs button')], q=document.getElementById('q');
+  tabs.forEach(b=>b.onclick=()=>{tabs.forEach(x=>x.classList.toggle('is-active',x===b));document.querySelectorAll('.pane').forEach(p=>p.classList.toggle('on',p.id===b.dataset.t));});
+  q.oninput=e=>{const v=e.target.value.toLowerCase();document.querySelectorAll('.pane.on tbody tr').forEach(tr=>tr.style.display=tr.textContent.toLowerCase().includes(v)?'':'none');};
+})();
+</script>

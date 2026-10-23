@@ -16,7 +16,7 @@
 <tbody>{% for o in overview %}<tr data-site="{{ o.site }}" style="cursor:pointer" class="{{ 'sel' if o.site==site }}"><td><b>{{ o.site }}</b></td><td>{{ o.at or '—' }}</td><td>{{ o.kind }}</td><td>{{ o.file }}</td><td>{{ o.span }}</td><td class="num">{{ o.rows }}</td><td>{{ o.last_day or '—' }}</td><td>{{ o.last_login or '—' }}</td></tr>{% endfor %}</tbody></table></div></div>
 {% endif %}
 <div id="sitepanel">{% include '_site_status.html' %}</div>
-<style>#overview tr.sel td{background:#e3eefa}#overview tbody tr:hover td{background:#eef2f7}</style>
+<style>#overview tr.sel td{background:var(--brand-soft)}#overview tbody tr:hover td{background:var(--hover)}</style>
 <script>
 (function(){
   const panel=document.getElementById('sitepanel'), inp=document.querySelector('input[name=site]');

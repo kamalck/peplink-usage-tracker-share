@@ -5,12 +5,17 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>{% block title %}Peplink Usage Tracker{% endblock %}</title>
 <link rel="icon" type="image/svg+xml" href="{{ url_for('static', filename='favicon.svg') }}">
-<meta name="theme-color" content="#1F4E78">
+<meta name="theme-color" content="#1f5fbf">
+<link rel="stylesheet" href="{{ url_for('static', filename='kck-ui/kck-ui.css') }}">
+<script src="{{ url_for('static', filename='kck-ui/kck-ui.js') }}"></script>
 <style>
-  :root{--bg:#f4f6f9;--card:#fff;--ink:#1c2430;--muted:#6b7686;--line:#dde3ea;--accent:#1F4E78;--accent2:#2e7bbf;--warn:#b7791f}
+  /* Colours come from the shared kit (static/kck-ui, loaded above). The names below are this app's older ones, now
+     aliases of kit tokens, so Light/Dark and every colour theme work. Do not hard-code colours in this file. */
+  :root{--card:var(--panel);--ink:var(--text);--accent:var(--brand);--accent2:var(--brand-ink)}
   *{box-sizing:border-box}
   body{margin:0;font:14px/1.45 system-ui,Segoe UI,Roboto,sans-serif;background:var(--bg);color:var(--ink)}
-  header{background:var(--accent);color:#fff;padding:12px 10px;display:flex;align-items:center;gap:12px}
+  a{color:var(--accent2)}
+  header{background:var(--accent);color:var(--on-brand);padding:12px 10px;display:flex;align-items:center;gap:12px;flex-wrap:wrap}
   header h1{margin:0;font-size:18px;font-weight:600}
   header span{opacity:.75;font-size:13px}
   main{max-width:none;margin:10px 0;padding:0 8px}
@@ -18,73 +23,95 @@
   .grid{display:grid;grid-template-columns:1fr 1fr;gap:16px}
   label{display:block;font-weight:600;margin-bottom:6px}
   small{color:var(--muted)}
-  input[type=file]{width:100%;padding:10px;border:1px dashed var(--line);border-radius:6px;background:#fafbfc}
+  input[type=file]{width:100%;padding:10px;border:1px dashed var(--line-strong);border-radius:6px;background:var(--hover);color:var(--ink)}
   .actions{margin-top:16px;display:flex;gap:10px;flex-wrap:wrap}
-  button{padding:9px 18px;border-radius:6px;border:1px solid var(--accent);background:var(--accent);color:#fff;font-weight:600;cursor:pointer}
-  button.secondary{background:#fff;color:var(--accent)}
-  .flash{background:#fdecea;color:#8a1c1c;border:1px solid #f5c2c0;padding:10px 14px;border-radius:6px;margin-bottom:16px}
+  button{padding:9px 18px;border-radius:6px;border:1px solid var(--accent);background:var(--accent);color:var(--on-brand);font-weight:600;cursor:pointer}
+  button:hover{background:var(--brand-hover);border-color:var(--brand-hover)}
+  button.secondary{background:var(--panel);color:var(--accent2);border-color:var(--accent2)}
+  button.secondary:hover{background:var(--brand-soft)}
+  button.danger{background:var(--bad);border-color:var(--bad);color:var(--panel)}
+  button.danger:hover{background:var(--bad);border-color:var(--bad);filter:brightness(.92)}
+  .flash{background:var(--bad-bg);color:var(--bad);border:1px solid var(--bad);padding:10px 14px;border-radius:6px;margin-bottom:16px}
   .stats{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:12px;margin-bottom:20px}
   .stat{background:var(--card);border:1px solid var(--line);border-radius:8px;padding:14px}
-  .stat b{display:block;font-size:22px;color:var(--accent)}
+  .stat b{display:block;font-size:22px;color:var(--accent2)}
   .stat span{color:var(--muted);font-size:12px}
   .tabs{display:flex;gap:4px;border-bottom:1px solid var(--line);margin-bottom:12px}
   .tabs a{padding:8px 14px;text-decoration:none;color:var(--muted);border-bottom:2px solid transparent;cursor:pointer}
-  .tabs a.active{color:var(--accent);border-color:var(--accent);font-weight:600}
+  .tabs a.active{color:var(--accent2);border-color:var(--accent2);font-weight:600}
   .panel{display:none}.panel.active{display:block}
-  .tools{display:flex;gap:10px;margin-bottom:10px;align-items:center}
-  .tools input{padding:7px 10px;border:1px solid var(--line);border-radius:6px;width:280px}
+  .tools{display:flex;gap:10px;margin-bottom:10px;align-items:center;flex-wrap:wrap}
+  .tools input{padding:7px 10px;border:1px solid var(--line-strong);border-radius:6px;width:280px;max-width:100%;background:var(--panel);color:var(--ink)}
   table{width:100%;border-collapse:collapse;font-size:13px}
   th,td{padding:7px 9px;border-bottom:1px solid var(--line);text-align:left;white-space:nowrap}
-  th{background:#eef2f7;position:sticky;top:0;cursor:pointer;user-select:none}
+  th{background:var(--raised);position:sticky;top:0;cursor:pointer;user-select:none}
   td.num,th.num{text-align:right;font-variant-numeric:tabular-nums}
   tr.unm td:first-child{color:var(--warn);font-style:italic}
   .wrap{overflow:auto;max-height:70vh;border:1px solid var(--line);border-radius:6px}
-  code{background:#eef2f7;padding:1px 5px;border-radius:4px}
+  code{background:var(--raised);padding:1px 5px;border-radius:4px}
+  ::placeholder{color:var(--muted);opacity:.8}
 </style>
 
 <style>
-  nav{display:flex;gap:4px;margin-left:auto;align-items:center}
+  nav{display:flex;gap:4px;margin-left:auto;align-items:center;flex-wrap:wrap}
   nav form{display:flex;margin:0}
-  nav button.signout{background:transparent;border:0;border-radius:6px;color:#fff;opacity:.8;padding:6px 12px;font:inherit;font-weight:400;line-height:inherit;cursor:pointer}
-  nav button.signout:hover{background:rgba(255,255,255,.18);opacity:1}
-  nav a{color:#fff;text-decoration:none;padding:6px 12px;border-radius:6px;opacity:.8}
-  nav a.active,nav a:hover{background:rgba(255,255,255,.18);opacity:1}
+  nav button.navbtn{background:transparent;border:0;border-radius:6px;color:var(--on-brand);opacity:.8;padding:6px 12px;font:inherit;font-weight:400;line-height:inherit;cursor:pointer}
+  nav button.navbtn:hover{background:color-mix(in srgb,var(--on-brand) 18%,transparent);opacity:1}
+  nav a{color:var(--on-brand);text-decoration:none;padding:6px 12px;border-radius:6px;opacity:.8}
+  nav a.active,nav a:hover{background:color-mix(in srgb,var(--on-brand) 18%,transparent);opacity:1}
+  nav .pal{gap:6px;margin:0 6px}
+  nav .pal__dot{width:20px;height:20px;border-color:color-mix(in srgb,var(--on-brand) 40%,transparent);background:var(--dot);padding:0}
+  nav .pal__dot:hover{border-color:var(--on-brand)}
+  nav .pal__dot[aria-pressed="true"]{border-color:var(--on-brand)}
+  nav .pal__dot:focus-visible{outline-color:var(--on-brand)}
   .row{display:flex;gap:12px;align-items:end;flex-wrap:wrap}
   .row label{margin:0}
-  input[type=text],input[type=date],select{padding:8px 10px;border:1px solid var(--line);border-radius:6px;font:inherit}
+  input[type=text],input[type=password],input[type=date],select{padding:8px 10px;border:1px solid var(--line-strong);border-radius:6px;font:inherit;background:var(--panel);color:var(--ink)}
   .muted{color:var(--muted)}
   ul.msgs{margin:0 0 16px;padding:0;list-style:none}
-  ul.msgs li{background:#eef6ee;border:1px solid #cfe5cf;padding:8px 12px;border-radius:6px;margin-bottom:6px;font-size:13px}
-  ul.msgs li.err{background:#fdecea;border-color:#f5c2c0}
-  .badge{display:inline-block;background:#eef2f7;border-radius:4px;padding:2px 7px;font-size:12px;margin:2px}
-  .badge.gap{background:#fdecea;color:#8a1c1c}
-  .seg{display:inline-flex;border:1px solid var(--accent);border-radius:6px;overflow:hidden}
-  .seg button{border:0;border-radius:0;background:#fff;color:var(--accent);padding:9px 16px}
-  .seg button.on{background:var(--accent);color:#fff}
+  ul.msgs li{background:var(--ok-bg);color:var(--ok);border:1px solid var(--ok);padding:8px 12px;border-radius:6px;margin-bottom:6px;font-size:13px}
+  ul.msgs li.err{background:var(--bad-bg);color:var(--bad);border-color:var(--bad)}
+  .badge{display:inline-block;background:var(--raised);color:var(--ink);border-radius:4px;padding:2px 7px;font-size:12px;margin:2px}
+  a.badge{color:var(--accent2)}
+  .badge.gap{background:var(--bad-bg);color:var(--bad)}
+  .seg{display:inline-flex;border:1px solid var(--accent2);border-radius:6px;overflow:hidden}
+  .seg button{border:0;border-radius:0;background:var(--panel);color:var(--accent2);padding:9px 16px}
+  .seg button:hover{background:var(--brand-soft)}
+  .seg button.on,.seg button.on:hover{background:var(--accent);color:var(--on-brand)}
   .seg.small button{padding:5px 11px;font-weight:500}
   .vtabs{display:flex;gap:4px;border-bottom:1px solid var(--line);margin-bottom:12px}
-  .vtabs a{padding:8px 14px;color:var(--muted);border-bottom:2px solid transparent;cursor:pointer}
-  .vtabs a.on{color:var(--accent);border-color:var(--accent);font-weight:600}
+  .vtabs a{padding:8px 14px;color:var(--muted);border-bottom:2px solid transparent;cursor:pointer;text-decoration:none}
+  .vtabs a.on{color:var(--accent2);border-color:var(--accent2);font-weight:600}
   .vpanel{display:none}.vpanel.on{display:block}
   footer{text-align:center;color:var(--muted);font-size:12px;padding:14px 8px 18px}
   .hide{display:none}
   .metric-tot .m-up,.metric-tot .m-down,.metric-tot .m-both,.metric-up .m-tot,.metric-up .m-down,.metric-up .m-both,
   .metric-down .m-tot,.metric-down .m-up,.metric-down .m-both,.metric-both .m-tot,.metric-both .m-up,.metric-both .m-down{display:none}
-  th.u{color:#2e7bbf}th.d{color:#2f8f6b}tfoot td{font-weight:700;background:#f7f9fb}
-  .stat.up b{color:#2e7bbf}.stat.down b{color:#2f8f6b}
+  /* upload = info colour, download = ok colour, in every colour theme (never the brand colour) */
+  th.u{color:var(--info)}th.d{color:var(--ok)}tfoot td{font-weight:700;background:var(--hover)}
+  .stat.up b{color:var(--info)}.stat.down b{color:var(--ok)}
   .bar{display:inline-block;height:8px;border-radius:2px;vertical-align:middle}
+  .bar.u{background:var(--info)}.bar.d{background:var(--ok)}
+  /* Phase 1 compat: switch off kit component looks this app does not use yet (Phase 2 adopts them) */
+  .card,.stat{box-shadow:none}.card+.card{margin-top:0}
+  .seg{padding:0;background:none}
+  .badge{height:auto;gap:0;font-weight:400}.badge::before{display:none}
+  .tabs{gap:4px}.tabs a{margin-bottom:0;font-weight:400}.tabs a.active{font-weight:600}
+  .tabs,.vtabs{overflow-x:auto}.tabs a,.vtabs a{white-space:nowrap}
 </style>
 </head>
 <body>
 <header><img src="{{ url_for('static', filename='favicon.svg') }}" alt="" width="30" height="30"><h1>Peplink Usage Tracker</h1><span>{% block subtitle %}{% endblock %}</span>
-{% if session.get('auth') %}<nav><a href="{{ url_for('home') }}" class="{{ 'active' if nav=='import' }}">Import</a><a href="{{ url_for('report') }}" class="{{ 'active' if nav=='report' }}">Report</a><a href="{{ url_for('quick') }}" class="{{ 'active' if nav=='quick' }}">Quick merge</a>
-<form method="post" action="{{ url_for('logout') }}"><input type="hidden" name="_csrf" value="{{ csrf_token() }}"><button class="signout">Sign out{% if session.get('user') %} ({{ session.get('user') }}){% endif %}</button></form></nav>{% endif %}</header>
+<nav>{% if session.get('auth') %}<a href="{{ url_for('home') }}" class="{{ 'active' if nav=='import' }}">Import</a><a href="{{ url_for('report') }}" class="{{ 'active' if nav=='report' }}">Report</a><a href="{{ url_for('quick') }}" class="{{ 'active' if nav=='quick' }}">Quick merge</a>{% endif %}
+<button type="button" class="navbtn" data-kck-theme-cycle title="Auto / Light / Dark">Theme</button><div data-kck-palettes></div>
+{% if session.get('auth') %}<form method="post" action="{{ url_for('logout') }}"><input type="hidden" name="_csrf" value="{{ csrf_token() }}"><button class="navbtn">Sign out{% if session.get('user') %} ({{ session.get('user') }}){% endif %}</button></form>{% endif %}</nav></header>
 <main>
 {% with msgs = get_flashed_messages() %}{% if msgs %}<ul class="msgs">{% for m in msgs %}<li class="{{ 'err' if 'ERROR' in m or 'skipped' in m or 'No ' in m }}">{{ m }}</li>{% endfor %}</ul>{% endif %}{% endwith %}
 {% block content %}{% endblock %}
 </main>
 <footer>Concept by KCK · Coded with Claude (AI)</footer>
 <script>
+(function(){var m=document.querySelector('meta[name=theme-color]');function t(){try{var c=getComputedStyle(document.documentElement).getPropertyValue('--brand').trim();if(m&&c)m.content=c}catch(e){}}t();document.addEventListener('kck:change',t);})();
 document.querySelectorAll('.tabs a').forEach(a=>a.onclick=()=>{document.querySelectorAll('.tabs a,.panel').forEach(e=>e.classList.remove('active'));a.classList.add('active');document.getElementById(a.dataset.t).classList.add('active');});
 const q=document.getElementById('q'); if(q) q.oninput=e=>{const v=e.target.value.toLowerCase();document.querySelectorAll('.panel.active tbody tr').forEach(tr=>tr.style.display=tr.textContent.toLowerCase().includes(v)?'':'none');};
 document.querySelectorAll('th').forEach(th=>th.onclick=()=>{const t=th.closest('table'),i=[...th.parentNode.children].indexOf(th),num=th.classList.contains('num'),asc=th.dataset.asc!=='1';th.dataset.asc=asc?'1':'0';

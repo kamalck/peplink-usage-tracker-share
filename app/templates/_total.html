@@ -1,4 +1,4 @@
-{% macro bar(u, d, mx) %}<span class="bar" style="width:{{ (60 * u / mx)|round(1) if mx else 0 }}px;background:#2e7bbf"></span><span class="bar" style="width:{{ (60 * d / mx)|round(1) if mx else 0 }}px;background:#2f8f6b"></span>{% endmacro %}
+{% macro bar(u, d, mx) %}<span class="bar u" style="width:{{ (60 * u / mx)|round(1) if mx else 0 }}px"></span><span class="bar d" style="width:{{ (60 * d / mx)|round(1) if mx else 0 }}px"></span>{% endmacro %}
 {% set umx = (per_user.values()|map(attribute='tot')|max) if per_user else 0 %}{% set dmx = (rows|map(attribute='tot')|max) if rows else 0 %}
 <div class="stats">
   <div class="stat"><b>{{ summary.users }}</b><span>users</span></div>

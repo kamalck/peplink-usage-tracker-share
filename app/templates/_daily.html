@@ -1,5 +1,5 @@
 {% macro dc(t, u, d) %}<td class="num"><span class="m-tot">{{ '{:,.0f}'.format(t) if t else '' }}</span><span class="m-up">{{ '{:,.0f}'.format(u) if u else '' }}</span><span class="m-down">{{ '{:,.0f}'.format(d) if d else '' }}</span><span class="m-both">{% if t %}{{ '{:,.0f}'.format(u) }} / {{ '{:,.0f}'.format(d) }}{% endif %}</span></td>{% endmacro %}
-{% macro bar(u, d, mx) %}<span class="bar" style="width:{{ (60 * u / mx)|round(1) if mx else 0 }}px;background:#2e7bbf"></span><span class="bar" style="width:{{ (60 * d / mx)|round(1) if mx else 0 }}px;background:#2f8f6b"></span>{% endmacro %}
+{% macro bar(u, d, mx) %}<span class="bar u" style="width:{{ (60 * u / mx)|round(1) if mx else 0 }}px"></span><span class="bar d" style="width:{{ (60 * d / mx)|round(1) if mx else 0 }}px"></span>{% endmacro %}
 {% set umx = (pivot[0].total if pivot else 0) %}{% set dmx = (devpivot[0].total if devpivot else 0) %}
 <div class="stats">
   <div class="stat"><b>{{ summary.days }}</b><span>days ({{ summary.first.strftime('%d %b') }} – {{ summary.last.strftime('%d %b') }})</span></div>

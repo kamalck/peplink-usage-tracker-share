@@ -25,3 +25,11 @@
 - Attribution rules (don't change silently): per device-day, the account with most logins that day; else last earlier login ("carried"); else next later login ("inferred"); only `[login]` events count.
 - Line endings are LF. Do not introduce CRLF.
 - Test locally before pushing: `python -m py_compile app/*.py`, and run the app with a scratch `DB_PATH` (never the real `data/` folder).
+
+## Design (shared UI kit)
+- This app uses a shared UI kit. `app/static/kck-ui/kck-ui.css` and `kck-ui.js` are plain copies of the kit's `dist/` folder: never edit them by hand. Changes to colours or components belong in the kit itself; the updated files are then copied into the app in a commit that touches only the `kck-ui` folder. Pull the latest changes before editing the UI.
+- Blue is the default accent. Users choose Auto / Light / Dark and a colour theme (blue, teal, green, amber, violet, graphite) with the kit's controls (`data-kck-theme-cycle`, `data-kck-palettes`); the kit stores the choice (`kck-theme`, `kck-palette`). Do not add another theme toggle or storage key.
+- New UI uses the kit's tokens (`var(--brand)`, `--panel`, `--text`, `--muted`, `--line`, `--ok` / `--warn` / `--bad` / `--info` and their `-bg` pairs) and never hard-coded colours. Status colours are never tied to `--brand`; text on a brand-coloured fill uses `--on-brand`; brand-coloured text uses `--brand-ink`. Keep Light and Dark working in every colour theme when you change the UI.
+- The older variable names in `app/templates/layout.html` (inline `<style>`) are aliases of kit tokens. A small guard block there stops the kit's class names (`.btn`, `.card`, ...) from changing the app's own components; leave it in place until the kit's components replace the app's own.
+- The Theme button and colour dots also show on the login page, by design. Upload uses `--info` and download uses `--ok` in tables, stat tiles and bars, so the two stay distinguishable in every colour theme.
+- Keep `static` and `/health` as the only open endpoints; the login gate is not affected by the kit.

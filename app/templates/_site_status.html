@@ -13,9 +13,9 @@
 </div>
 {% if st.periods %}<div class="card"><div class="chips"><b>7-day / period files:</b>
 {% for p in st.periods %}<a href="{{ url_for('period', site=site, start=p[0], end=p[1]) }}" class="btn secondary small">{{ p[0] }} → {{ p[1] }} ({{ p[2] }} devices, {{ '{:,.1f}'.format(p[3]/1024) }} GB)</a>{% endfor %}</div></div>{% endif %}
-<div class="card"><b>Recent imports</b>
-<div class="table-wrap scroll mt" style="max-height:40vh"><table class="grid"><thead><tr><th>When</th><th>Kind</th><th>File</th><th class="num">Rows</th><th class="num">New</th><th>From</th><th>To</th></tr></thead>
-<tbody>{% for i in st.imports %}<tr><td>{{ i[0] }}</td><td>{{ i[1] }}</td><td>{{ i[2] }}</td><td class="num">{{ i[3] }}</td><td class="num">{{ i[4] }}</td><td>{{ i[5] }}</td><td>{{ i[6] }}</td></tr>{% endfor %}</tbody></table></div></div>
+<div class="card"><b>Recent imports and deletions</b>
+<div class="table-wrap scroll mt" style="max-height:40vh"><table class="grid"><thead><tr><th>When</th><th>Kind</th><th>File</th><th class="num">Rows</th><th class="num">New</th><th>From</th><th>To</th><th>By</th></tr></thead>
+<tbody>{% for i in st.imports %}<tr><td>{{ i[0] }}</td><td>{{ i[1] }}</td><td>{{ i[2] }}</td><td class="num">{{ i[3] }}</td><td class="num">{{ i[4] }}</td><td>{{ i[5] }}</td><td>{{ i[6] }}</td><td>{{ i[7] or '' }}</td></tr>{% endfor %}</tbody></table></div></div>
 <form class="card" method="post" action="{{ url_for('do_delete') }}" onsubmit="return window.confirm('Delete the selected data for ' + this.site.value + '? This cannot be undone.')">
   <input type="hidden" name="_csrf" value="{{ csrf_token() }}"><input type="hidden" name="site" value="{{ site }}">
   <b>Delete data for {{ site }}</b>

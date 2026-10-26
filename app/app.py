@@ -4,8 +4,10 @@ from flask import Flask, render_template, request, send_file, flash, redirect, u
 from merge import merge, build_xlsx
 from daily import merge_daily, build_daily_xlsx, compute, compute_period, device_pivot, build_period_xlsx, build_device_xlsx, build_period_device_xlsx, build_total_xlsx, unmatched_devices
 import store
+import sqlite3
+from werkzeug.middleware.proxy_fix import ProxyFix
 
-VERSION = '1.9.1'
+VERSION = '1.10.0'
 
 
 def _secret_key():
@@ -36,6 +38,9 @@ app.config.update(SESSION_COOKIE_NAME=os.environ.get('SESSION_COOKIE_NAME') or '
                   SESSION_COOKIE_SECURE=os.environ.get('SESSION_COOKIE_SECURE', '1') != '0',        # '0' only for plain-http access
                   SESSION_COOKIE_HTTPONLY=True, SESSION_COOKIE_SAMESITE='Lax',
                   PERMANENT_SESSION_LIFETIME=timedelta(hours=12))
+_hops = int(os.environ.get('TRUSTED_PROXIES', '0') or 0)
+if _hops > 0:        # behind N reverse proxies: use the real client address (login lockout is per address) and scheme
+    app.wsgi_app = ProxyFix(app.wsgi_app, x_for=_hops, x_proto=_hops)
 MIME = 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
 
 # Login comes from the environment (.env on the host) - nothing secret is ever in the repo.
@@ -68,6 +73,23 @@ def _csrf_token():
     if 'csrf' not in session:
         session['csrf'] = secrets.token_hex(16)
     return session['csrf']
+
+
+@app.after_request
+def secure_headers(resp):
+    """Signed-in pages hold MACs and guest IDs: never cache them (Back button after sign-out), plus basic hardening headers."""
+    resp.headers.setdefault('X-Content-Type-Options', 'nosniff')
+    resp.headers.setdefault('X-Frame-Options', 'SAMEORIGIN')
+    resp.headers.setdefault('Referrer-Policy', 'same-origin')
+    if request.endpoint != 'static':
+        resp.headers['Cache-Control'] = 'no-store'
+    return resp
+
+
+def _prune_fails(now):
+    """Forget addresses whose lock and counting window have both expired (the table would otherwise only ever grow)."""
+    for ip in [k for k, r in _fails.items() if r[2] <= now and now - r[1] > FAIL_WINDOW]:
+        _fails.pop(ip, None)
 
 
 app.jinja_env.globals['csrf_token'] = _csrf_token
@@ -121,6 +143,7 @@ def login():
             session['user'] = who
             session.permanent = True
             return redirect(_safe_next(nxt))
+        _prune_fails(now)
         rec = _fails.get(ip)
         if not rec or now - rec[1] > FAIL_WINDOW:
             rec = [0, now, 0]
@@ -198,6 +221,7 @@ def do_import():
             p_start = date.fromisoformat(request.form['period_start'])
         except ValueError:
             flash('ERROR: period start is not a date - ignored.')
+    who = session.get('user', '')
     msgs = []
     for f in files:
         fsite = site or store.site_from_name(f.filename)
@@ -207,15 +231,16 @@ def do_import():
         try:
             low = f.filename.lower()
             if low.endswith('.xlsx'):
-                r = store.import_events(fsite, f.filename, f.stream)
-                msgs.append(f'{f.filename}: {r["rows"]} logins read, {r["added"]} new ({r["first"]} → {r["last"]})')
+                r = store.import_events(fsite, f.filename, f.stream, user=who)
+                msgs.append(f'{f.filename}: {r["rows"]} logins read, {r["added"]} new ({r["first"]} → {r["last"]})'
+                            + (f' - WARNING: {r["skipped"]} login rows skipped (date or MAC unreadable)' if r['skipped'] else ''))
             elif low.endswith('.csv'):
                 period = kind == 'period'
                 if period:
-                    r = store.import_period(fsite, f.filename, f.stream, start=p_start)
+                    r = store.import_period(fsite, f.filename, f.stream, start=p_start, user=who)
                     msgs.append(f'{f.filename}: {r["rows"]} devices stored for period {r["start"]} → {r["end"]}')
                 else:
-                    r = store.import_usage(fsite, f.filename, f.stream)
+                    r = store.import_usage(fsite, f.filename, f.stream, user=who)
                     msgs.append(f'{f.filename}: {r["rows"]} devices stored for {r["day"]}')
             else:
                 msgs.append(f'{f.filename}: ERROR unsupported file type (event log = .xlsx, usage = .csv)')
@@ -246,7 +271,7 @@ def do_delete():
     if what == 'all' and request.form.get('confirm', '').strip().upper() != site:
         flash(f'ERROR: to delete everything for {site}, type the site name in the confirm box - nothing deleted.')
         return redirect(url_for('home', site=site))
-    n = store.delete_data(site, what, rng[0], rng[1])
+    n = store.delete_data(site, what, rng[0], rng[1], user=session.get('user', ''))
     label = {'usage': 'daily usage rows', 'periods': 'period usage rows', 'logins': 'logins', 'all': 'rows (everything)'}[what]
     flash(f'Deleted {n} {label} for {site}.')
     return redirect(url_for('home', site=site))
@@ -343,6 +368,23 @@ def health():
 
 
 # ---------- CLI ----------
+def backup_db(dest_dir=None, keep=14):
+    """Copy the database with SQLite's backup API (consistent even mid-import), keep the newest `keep` copies."""
+    dest_dir = dest_dir or os.path.join(os.path.dirname(store.DB_PATH), 'backups')
+    os.makedirs(dest_dir, exist_ok=True)
+    out = os.path.join(dest_dir, f'peplink-{datetime.now():%Y%m%d-%H%M%S}.db')
+    src, dst = sqlite3.connect(store.DB_PATH), sqlite3.connect(out)
+    try:
+        src.backup(dst)
+    finally:
+        dst.close(); src.close()
+    old = sorted(f for f in os.listdir(dest_dir) if f.startswith('peplink-') and f.endswith('.db'))[:-max(keep, 1)]
+    for f in old:
+        os.remove(os.path.join(dest_dir, f))
+    return out
+
+
+
 def cli():
     p = argparse.ArgumentParser(prog='app.py', description='Starlink usage by user')
     sub = p.add_subparsers(dest='cmd', required=True)
@@ -353,6 +395,8 @@ def cli():
     r = sub.add_parser('report', help='Per-user-per-day report from the store')
     r.add_argument('--site', required=True); r.add_argument('--start'); r.add_argument('--end'); r.add_argument('-o', '--output')
     r.add_argument('--view', choices=['total', 'day'], default='total', help='total = one row per user/device for the whole range (default); day = one column per day')
+    b = sub.add_parser('backup', help='Consistent copy of the database into data/backups (safe while the app is running)')
+    b.add_argument('--dir'); b.add_argument('--keep', type=int, default=14, help='backups to keep (default 14)')
     a = p.parse_args()
     if a.cmd == 'merge':
         if len(a.usage) > 1:
@@ -378,6 +422,8 @@ def cli():
                     r = store.import_events(site, name, fh); print(f'{name}: {r["rows"]} logins, {r["added"]} new ({r["first"]} → {r["last"]})')
                 else:
                     r = store.import_usage(site, name, fh); print(f'{name}: {r["rows"]} devices for {r["day"]}')
+    elif a.cmd == 'backup':
+        print('Wrote', backup_db(a.dir, a.keep))
     elif a.cmd == 'report':
         st = store.status(a.site.upper())
         if not st['days']:

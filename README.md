@@ -34,6 +34,7 @@ Secrets and site-specific values live in an untracked `.env` next to `docker-com
 | `ADMIN_USERS` | optional extra accounts, `user:password;user2:password2` |
 | `SESSION_COOKIE_NAME` | login cookie name (default `peplink_session`; keep it unique per app on a shared host name) |
 | `SESSION_COOKIE_SECURE` | `1` (default) = cookie sent over HTTPS only; set `0` only when using plain `http://` from another machine |
+| `TRUSTED_PROXIES` | number of reverse proxies in front of the app (default `0`); set it so the failed-login lockout counts each client's real address |
 | `SECRET_KEY` | signs the login cookie; if empty, one is generated into `data/.secret_key` |
 
 Create it once on the host:
@@ -44,6 +45,8 @@ chmod 600 .env && cat .env        # note the generated password, then: docker co
 ```
 
 ## Data
+`python app/app.py backup` (in Docker: `docker compose exec peplink-usage-tracker python app.py backup`) writes a consistent copy of the database to `data/backups/` and keeps the newest 14 (`--keep N`, `--dir PATH`); it is safe while the app is running, so it can go in a nightly cron job. Copy `data/backups/` somewhere else too.
+
 `data/peplink.db` holds everything imported. The compose file mounts `./data` so it survives rebuilds; back it up with your other SQLite DBs.
 
 ## Download and install
@@ -64,6 +67,7 @@ chmod 600 .env && cat .env        # note the generated password, then: docker co
 4. **Open** `http://localhost:5020` and sign in with the user name and password from `.env`. The login cookie is marked `Secure`; if you open the app over plain `http://` from another machine (not localhost), set `SESSION_COOKIE_SECURE=0` in `.env` and run `docker compose up -d`, or put the app behind HTTPS.
 5. **Use it**: *Import* your event-log `.xlsx` and daily usage `.csv` exports, then open *Report*. Imported data is kept in `./data` and survives restarts and rebuilds.
 
+**Back up:** `docker compose exec peplink-usage-tracker python app.py backup` writes a consistent copy of the database to `data/backups/`.
 **Update:** download or pull the newer version, then run `docker compose up -d --build` again; `data/` and `.env` are untouched.
 **Stop:** `docker compose down`. **Logs:** `docker compose logs -f`. **Health check:** `http://localhost:5020/health`.
 
@@ -84,6 +88,7 @@ python app/app.py report --view day --site SITE1 --start 2026-10-03 --end 2026-1
 ```
 
 ## Changelog
+- **v1.10.0** (2026-10-26) — Review fixes. **Safer imports:** an empty or header-only usage CSV is refused instead of wiping the day/period; numbers with thousands separators (`1,234.5`) are accepted and a genuine bad value gives a readable `row N: "x" is not a number in column "..."` message; event-log login rows with an unreadable date or MAC are counted and reported as a warning instead of being dropped silently. **Audit trail:** *Recent imports and deletions* now shows who imported or deleted (`By`) and logs every delete. **Security:** signed-in pages are sent `Cache-Control: no-store` plus `nosniff` / `X-Frame-Options` / `Referrer-Policy` headers; new `TRUSTED_PROXIES` setting so the failed-login lockout counts real client addresses behind a proxy; stale lockout entries are pruned; `gunicorn` 23.0.0 and `werkzeug` 3.0.6 pinned. **Operations:** SQLite runs in WAL mode (reports no longer wait for an import); `backup` command (see Data). **Tests:** `tests/` now covers attribution rules, import/delete rules, report views and Excel layout, security headers, lockout, audit trail, migration and backup (`python -m unittest discover -s tests`). **docker-compose.yml and app/requirements.txt changed** - rebuild required; the `imports` table gains a `user` column automatically (existing data is kept).
 - **v1.9.1** (2026-10-26) — Login cookie hardened: unique name `peplink_session` (was Flask's default `session`), `Secure` on by default (`SESSION_COOKIE_SECURE=0` for plain-http access), `HttpOnly` and `SameSite=Lax` kept; new `SESSION_COOKIE_NAME` / `SESSION_COOKIE_SECURE` variables in `.env.example` and `docker-compose.yml`; cookie tests in `tests/`. **docker-compose.yml changed.** Everyone is signed out once after the update because the cookie name changed. If you open the app over plain `http://` (not localhost), add `SESSION_COOKIE_SECURE=0` to `.env`.
 - **v1.9.0** (2026-10-23) — Shared UI kit 0.4.0, second step: buttons, text boxes and drop-downs, tables, panels, stat tiles, tabs, the Total/Upload/Download switches, messages and day tags now use the kit's own components, so they look like the other internal apps (buttons are 36 px high with 8 px corners, tables have uppercase column headings and more padding, panels have a soft shadow, messages are plain coloured bars, 7-day period files are small buttons, missing days are red pills). The tables still scroll sideways when wide. Nothing else changes: same pages, same data, same sign-in. **Fix:** the *Delete data* confirmation box ("Delete the selected data … cannot be undone") never appeared, so *Delete* removed data at once; it now asks first. No schema or config change.
 - **v1.8.1** (2026-10-23) — Shared UI kit 0.3.1: after a browser had an old saved Light or Dark choice, Auto could not be selected again; fixed (the kit now moves the old setting to its own key). No other change.

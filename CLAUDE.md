@@ -38,3 +38,7 @@
 - The login cookie has its own name (`SESSION_COOKIE_NAME`, default `peplink_session`), never Flask's default `session`, so it cannot clash with another app on the same host name (browsers scope cookies by host name, not port). Do not rename it casually: everyone is signed out once.
 - `Secure` is on by default (`SESSION_COOKIE_SECURE`; `0` only for plain-http access), `HttpOnly` and `SameSite=Lax` are set explicitly, and no `Domain=` is added.
 - `tests/test_cookie.py` checks the name and flags (`python -m unittest discover -s tests`). Keep it passing.
+
+## Tests
+- `python -m unittest discover -s tests` runs the test suite on scratch databases (never `data/`). Add a test for every behaviour you change, above all the attribution rules (same-day login, carried, inferred), import/delete rules and the Excel layouts.
+- Imports must never wipe data on a bad file: an empty usage export is refused, and bad numbers fail with a readable message before anything is deleted.

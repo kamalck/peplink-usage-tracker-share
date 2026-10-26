@@ -3,7 +3,7 @@ import os, re, sqlite3, collections
 from contextlib import contextmanager
 from datetime import datetime, date, timedelta
 from merge import parse_usage
-from daily import parse_events_by_day, date_from_name, dates_from_name
+from daily import parse_events_stats, date_from_name, dates_from_name
 
 DB_PATH = os.environ.get('DB_PATH', os.path.join(os.path.dirname(os.path.abspath(__file__)), 'data', 'peplink.db'))
 SITE_RE = re.compile(r'([A-Za-z0-9]+)_-_Starlink', re.I)
@@ -22,7 +22,7 @@ CREATE TABLE IF NOT EXISTS usage_period (
   PRIMARY KEY (site, start, end, mac));
 CREATE TABLE IF NOT EXISTS imports (
   id INTEGER PRIMARY KEY AUTOINCREMENT, imported_at TEXT, site TEXT, kind TEXT, filename TEXT,
-  rows INTEGER, added INTEGER, first_ts TEXT, last_ts TEXT);
+  rows INTEGER, added INTEGER, first_ts TEXT, last_ts TEXT, user TEXT);
 """
 
 
@@ -42,7 +42,10 @@ def connect():
     con = sqlite3.connect(DB_PATH, timeout=30)
     try:
         if not _ready:
+            con.execute('PRAGMA journal_mode=WAL')          # readers (reports) no longer wait for an import to finish
             con.executescript(SCHEMA)
+            if 'user' not in [r[1] for r in con.execute('PRAGMA table_info(imports)')]:
+                con.execute('ALTER TABLE imports ADD COLUMN user TEXT')     # in-place migration of an existing database
             _ready = True
         yield con
         con.commit()
@@ -53,36 +56,39 @@ def connect():
         con.close()
 
 
-def import_events(site, filename, fileobj):
-    ev = parse_events_by_day(fileobj)
+def _log(con, site, kind, filename, rows, added, first, last, user):
+    con.execute('INSERT INTO imports (imported_at, site, kind, filename, rows, added, first_ts, last_ts, user) VALUES (?,?,?,?,?,?,?,?,?)',
+                (datetime.now().isoformat(sep=' ', timespec='seconds'), site, kind, filename, rows, added, first, last, user or ''))
+
+
+def import_events(site, filename, fileobj, user=''):
+    ev, skipped = parse_events_stats(fileobj)
     rows = [(site, dt.isoformat(sep=' '), mac, user) for mac, lst in ev.items() for dt, user in lst]
     ts = sorted(r[1] for r in rows)
     with connect() as con:
         before = con.execute('SELECT COUNT(*) FROM logins WHERE site=?', (site,)).fetchone()[0]
         con.executemany('INSERT OR IGNORE INTO logins VALUES (?,?,?,?)', rows)
         after = con.execute('SELECT COUNT(*) FROM logins WHERE site=?', (site,)).fetchone()[0]
-        con.execute('INSERT INTO imports (imported_at, site, kind, filename, rows, added, first_ts, last_ts) VALUES (?,?,?,?,?,?,?,?)',
-                    (datetime.now().isoformat(sep=' ', timespec='seconds'), site, 'events', filename, len(rows), after - before,
-                     ts[0] if ts else None, ts[-1] if ts else None))
-    return {'rows': len(rows), 'added': after - before, 'first': ts[0] if ts else '', 'last': ts[-1] if ts else ''}
+        _log(con, site, 'events', filename, len(rows), after - before, ts[0] if ts else None, ts[-1] if ts else None, user)
+    return {'rows': len(rows), 'added': after - before, 'first': ts[0] if ts else '', 'last': ts[-1] if ts else '', 'skipped': skipped}
 
 
-def import_usage(site, filename, fileobj, day=None):
+def import_usage(site, filename, fileobj, day=None, user=''):
     day = day or date_from_name(filename)
     if not day:
         raise ValueError(f'No date (YYYY-MM-DD) in file name: {filename}')
     usage = parse_usage(fileobj)
+    if not usage:
+        raise ValueError('no device rows found in the file - nothing was changed (an empty export would wipe the day)')
     with connect() as con:
         con.execute('DELETE FROM usage_daily WHERE site=? AND day=?', (site, day.isoformat()))
         con.executemany('INSERT INTO usage_daily VALUES (?,?,?,?,?,?,?,?)',
                         [(site, day.isoformat(), mac, u['name'], u['up'], u['down'], u['tot'], int(u['is_mac'])) for mac, u in usage.items()])
-        con.execute('INSERT INTO imports (imported_at, site, kind, filename, rows, added, first_ts, last_ts) VALUES (?,?,?,?,?,?,?,?)',
-                    (datetime.now().isoformat(sep=' ', timespec='seconds'), site, 'usage', filename, len(usage), len(usage),
-                     day.isoformat(), day.isoformat()))
+        _log(con, site, 'usage', filename, len(usage), len(usage), day.isoformat(), day.isoformat(), user)
     return {'rows': len(usage), 'day': day}
 
 
-def import_period(site, filename, fileobj, start=None, end=None):
+def import_period(site, filename, fileobj, start=None, end=None, user=''):
     """A usage export covering several days (e.g. 7). Dates come from the form, else from two dates in the file name."""
     if not start:
         ds = dates_from_name(filename)
@@ -96,14 +102,14 @@ def import_period(site, filename, fileobj, start=None, end=None):
     if end < start:
         start, end = end, start
     usage = parse_usage(fileobj)
+    if not usage:
+        raise ValueError('no device rows found in the file - nothing was changed (an empty export would wipe the period)')
     with connect() as con:
         con.execute('DELETE FROM usage_period WHERE site=? AND start=? AND end=?', (site, start.isoformat(), end.isoformat()))
         con.executemany('INSERT INTO usage_period VALUES (?,?,?,?,?,?,?,?,?,?)',
                         [(site, start.isoformat(), end.isoformat(), mac, u['name'], u['up'], u['down'], u['tot'], u['pct'], int(u['is_mac']))
                          for mac, u in usage.items()])
-        con.execute('INSERT INTO imports (imported_at, site, kind, filename, rows, added, first_ts, last_ts) VALUES (?,?,?,?,?,?,?,?)',
-                    (datetime.now().isoformat(sep=' ', timespec='seconds'), site, 'period', filename, len(usage), len(usage),
-                     start.isoformat(), end.isoformat()))
+        _log(con, site, 'period', filename, len(usage), len(usage), start.isoformat(), end.isoformat(), user)
     return {'rows': len(usage), 'start': start, 'end': end}
 
 
@@ -121,7 +127,7 @@ def load_period(site, start, end):
     return ev, (usage or None)
 
 
-def delete_data(site, what, start=None, end=None):
+def delete_data(site, what, start=None, end=None, user=''):
     """Delete stored data for one site. what: usage | periods | logins | all. start/end (dates, optional) limit
     usage/logins to that range and periods to those overlapping it; 'all' ignores them. Returns rows removed."""
     s, e = (start.isoformat() if start else ''), (end.isoformat() if end else '9999-12-31')
@@ -138,6 +144,8 @@ def delete_data(site, what, start=None, end=None):
                              (site, '' if what == 'all' else s, '9999-12-31' if what == 'all' else e)).rowcount
         if what == 'all':
             con.execute('DELETE FROM imports WHERE site=?', (site,))
+        span = f' {start or "..."} to {end or "..."}' if (start or end) else ' (all dates)'
+        _log(con, site, 'delete', what + span, n, 0, None, None, user)      # audit trail: who deleted what
     return n
 
 
@@ -152,7 +160,7 @@ def sites_overview():
     out = []
     with connect() as con:
         for site in sites():
-            last = con.execute('SELECT imported_at, kind, filename, rows, first_ts, last_ts FROM imports WHERE site=? ORDER BY id DESC LIMIT 1', (site,)).fetchone()
+            last = con.execute('SELECT imported_at, kind, filename, rows, first_ts, last_ts FROM imports WHERE site=? AND kind<>\'delete\' ORDER BY id DESC LIMIT 1', (site,)).fetchone()
             day = con.execute('SELECT MAX(day), COUNT(DISTINCT day) FROM usage_daily WHERE site=?', (site,)).fetchone()
             lg = con.execute('SELECT MAX(ts) FROM logins WHERE site=?', (site,)).fetchone()
             out.append({'site': site, 'at': last[0] if last else '', 'kind': last[1] if last else '', 'file': last[2] if last else '',
@@ -167,7 +175,7 @@ def status(site):
         days = [r[0] for r in con.execute('SELECT DISTINCT day FROM usage_daily WHERE site=? ORDER BY day', (site,))]
         periods = con.execute('SELECT start, end, COUNT(*), SUM(tot) FROM usage_period WHERE site=? GROUP BY start, end ORDER BY start', (site,)).fetchall()
         lg = con.execute('SELECT COUNT(*), MIN(ts), MAX(ts) FROM logins WHERE site=?', (site,)).fetchone()
-        imports = con.execute('SELECT imported_at, kind, filename, rows, added, first_ts, last_ts FROM imports WHERE site=? ORDER BY id DESC LIMIT 30', (site,)).fetchall()
+        imports = con.execute('SELECT imported_at, kind, filename, rows, added, first_ts, last_ts, user FROM imports WHERE site=? ORDER BY id DESC LIMIT 30', (site,)).fetchall()
     # gaps in daily coverage
     gaps = []
     if days:

@@ -51,6 +51,17 @@ def parse_event_log(fileobj):
     return logins, last
 
 
+def _num(value, col, line):
+    """A usage figure: tolerates thousands separators ("1,234.5"); a real non-number gets a readable error."""
+    t = (value or '').replace(',', '').replace('%', '').strip()
+    if not t:
+        return 0.0
+    try:
+        return float(t)
+    except ValueError:
+        raise ValueError(f'row {line}: "{value}" is not a number in column "{col}"') from None
+
+
 def parse_usage(fileobj):
     """Return OrderedDict{mac: {name, up, down, tot}} (duplicate MACs summed)."""
     text = fileobj.read()
@@ -74,11 +85,11 @@ def parse_usage(fileobj):
             continue
         d = usage.setdefault(mac, {'name': ((row.get(c_name) if c_name else '') or '').strip(), 'up': 0.0, 'down': 0.0, 'tot': 0.0, 'pct': 0.0,
                                    'is_mac': bool(MAC_RE.match(mac))})
-        d['up'] += float(row.get(c_up) or 0)
-        d['down'] += float(row.get(c_down) or 0)
-        d['tot'] += float(row.get(c_tot) or 0)
+        d['up'] += _num(row.get(c_up), c_up, rdr.line_num)
+        d['down'] += _num(row.get(c_down), c_down, rdr.line_num)
+        d['tot'] += _num(row.get(c_tot), c_tot, rdr.line_num)
         if c_pct:
-            d['pct'] += float((row.get(c_pct) or '0').replace('%', '') or 0)
+            d['pct'] += _num(row.get(c_pct), c_pct, rdr.line_num)
     return usage
 
 

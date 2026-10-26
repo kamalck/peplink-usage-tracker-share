@@ -4,7 +4,7 @@ from datetime import datetime, date
 import openpyxl
 from openpyxl.styles import Font, PatternFill
 from openpyxl.utils import get_column_letter
-from merge import parse_usage, LOGIN_RE, MAC_RE, dev_label
+from merge import parse_usage, LOGIN_RE, dev_label
 
 DATE_RE = re.compile(r'(\d{4}-\d{2}-\d{2})')
 
@@ -27,6 +27,11 @@ def dates_from_name(name):
 
 def parse_events_by_day(fileobj):
     """Return {mac: [(datetime, user), ...]} sorted ascending (successful logins only)."""
+    return parse_events_stats(fileobj)[0]
+
+
+def parse_events_stats(fileobj):
+    """Like parse_events_by_day but returns (events, skipped): skipped = login rows ignored because the date/MAC was missing or unreadable."""
     wb = openpyxl.load_workbook(fileobj, read_only=True, data_only=True)
     ws = wb.active
     rows = ws.iter_rows(values_only=True)
@@ -40,22 +45,24 @@ def parse_events_by_day(fileobj):
     if i_dt is None or i_mac is None or i_det is None:
         raise ValueError('Event log must have "Date/Time", "Client MAC" and "Details" columns')
     ev = collections.defaultdict(list)
+    skipped = 0
     for r in rows:
         dt, mac, det = r[i_dt], r[i_mac], r[i_det]
-        if not (dt and mac and det):
-            continue
-        m = LOGIN_RE.search(str(det))
+        m = LOGIN_RE.search(str(det)) if det else None
         if not m:
-            continue
+            continue                        # not a login event (failed password, quota, blank row ...)
         if isinstance(dt, str):
             try:
-                dt = datetime.fromisoformat(dt)
+                dt = datetime.fromisoformat(dt.strip())
             except ValueError:
-                continue
+                dt = None
+        if not (dt and mac):
+            skipped += 1                    # a login we could not place in time - counted, never silent
+            continue
         ev[str(mac).strip().upper().replace('-', ':')].append((dt, m.group(1)))
     for k in ev:
         ev[k].sort()
-    return ev
+    return ev, skipped
 
 
 def attribute(ev_list, day):

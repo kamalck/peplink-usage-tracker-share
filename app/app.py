@@ -5,7 +5,7 @@ from merge import merge, build_xlsx
 from daily import merge_daily, build_daily_xlsx, compute, compute_period, device_pivot, build_period_xlsx, build_device_xlsx, build_period_device_xlsx, build_total_xlsx, unmatched_devices
 import store
 
-VERSION = '1.9.0'
+VERSION = '1.9.1'
 
 
 def _secret_key():
@@ -32,7 +32,9 @@ def _secret_key():
 app = Flask(__name__)
 app.secret_key = _secret_key()
 app.config['MAX_CONTENT_LENGTH'] = 256 * 1024 * 1024
-app.config.update(SESSION_COOKIE_HTTPONLY=True, SESSION_COOKIE_SAMESITE='Lax',
+app.config.update(SESSION_COOKIE_NAME=os.environ.get('SESSION_COOKIE_NAME') or 'peplink_session',   # unique per app: never the default 'session'
+                  SESSION_COOKIE_SECURE=os.environ.get('SESSION_COOKIE_SECURE', '1') != '0',        # '0' only for plain-http access
+                  SESSION_COOKIE_HTTPONLY=True, SESSION_COOKIE_SAMESITE='Lax',
                   PERMANENT_SESSION_LIFETIME=timedelta(hours=12))
 MIME = 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
 

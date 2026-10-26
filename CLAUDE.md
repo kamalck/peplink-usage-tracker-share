@@ -33,3 +33,8 @@
 - The older variable names in `app/templates/layout.html` (inline `<style>`) are aliases of kit tokens. A small guard block there stops the kit's class names (`.btn`, `.card`, ...) from changing the app's own components; leave it in place until the kit's components replace the app's own.
 - The Theme button and colour dots also show on the login page, by design. Upload uses `--info` and download uses `--ok` in tables, stat tiles and bars, so the two stay distinguishable in every colour theme.
 - Keep `static` and `/health` as the only open endpoints; the login gate is not affected by the kit.
+
+## Session cookie
+- The login cookie has its own name (`SESSION_COOKIE_NAME`, default `peplink_session`), never Flask's default `session`, so it cannot clash with another app on the same host name (browsers scope cookies by host name, not port). Do not rename it casually: everyone is signed out once.
+- `Secure` is on by default (`SESSION_COOKIE_SECURE`; `0` only for plain-http access), `HttpOnly` and `SameSite=Lax` are set explicitly, and no `Domain=` is added.
+- `tests/test_cookie.py` checks the name and flags (`python -m unittest discover -s tests`). Keep it passing.

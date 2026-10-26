@@ -32,6 +32,8 @@ Secrets and site-specific values live in an untracked `.env` next to `docker-com
 | `ADMIN_USERNAME` | sign-in user name (default `admin`) |
 | `ADMIN_PASSWORD` | sign-in password — **required**; the app is locked while empty |
 | `ADMIN_USERS` | optional extra accounts, `user:password;user2:password2` |
+| `SESSION_COOKIE_NAME` | login cookie name (default `peplink_session`; keep it unique per app on a shared host name) |
+| `SESSION_COOKIE_SECURE` | `1` (default) = cookie sent over HTTPS only; set `0` only when using plain `http://` from another machine |
 | `SECRET_KEY` | signs the login cookie; if empty, one is generated into `data/.secret_key` |
 
 Create it once on the host:
@@ -59,7 +61,7 @@ chmod 600 .env && cat .env        # note the generated password, then: docker co
    ```bash
    docker compose up -d --build
    ```
-4. **Open** `http://localhost:5020` (or `http://<your-host>:5020` from another machine) and sign in with the user name and password from `.env`.
+4. **Open** `http://localhost:5020` and sign in with the user name and password from `.env`. The login cookie is marked `Secure`; if you open the app over plain `http://` from another machine (not localhost), set `SESSION_COOKIE_SECURE=0` in `.env` and run `docker compose up -d`, or put the app behind HTTPS.
 5. **Use it**: *Import* your event-log `.xlsx` and daily usage `.csv` exports, then open *Report*. Imported data is kept in `./data` and survives restarts and rebuilds.
 
 **Update:** download or pull the newer version, then run `docker compose up -d --build` again; `data/` and `.env` are untouched.
@@ -82,6 +84,7 @@ python app/app.py report --view day --site SITE1 --start 2026-10-03 --end 2026-1
 ```
 
 ## Changelog
+- **v1.9.1** (2026-10-26) — Login cookie hardened: unique name `peplink_session` (was Flask's default `session`), `Secure` on by default (`SESSION_COOKIE_SECURE=0` for plain-http access), `HttpOnly` and `SameSite=Lax` kept; new `SESSION_COOKIE_NAME` / `SESSION_COOKIE_SECURE` variables in `.env.example` and `docker-compose.yml`; cookie tests in `tests/`. **docker-compose.yml changed.** Everyone is signed out once after the update because the cookie name changed. If you open the app over plain `http://` (not localhost), add `SESSION_COOKIE_SECURE=0` to `.env`.
 - **v1.9.0** (2026-10-23) — Shared UI kit 0.4.0, second step: buttons, text boxes and drop-downs, tables, panels, stat tiles, tabs, the Total/Upload/Download switches, messages and day tags now use the kit's own components, so they look like the other internal apps (buttons are 36 px high with 8 px corners, tables have uppercase column headings and more padding, panels have a soft shadow, messages are plain coloured bars, 7-day period files are small buttons, missing days are red pills). The tables still scroll sideways when wide. Nothing else changes: same pages, same data, same sign-in. **Fix:** the *Delete data* confirmation box ("Delete the selected data … cannot be undone") never appeared, so *Delete* removed data at once; it now asks first. No schema or config change.
 - **v1.8.1** (2026-10-23) — Shared UI kit 0.3.1: after a browser had an old saved Light or Dark choice, Auto could not be selected again; fixed (the kit now moves the old setting to its own key). No other change.
 - **v1.8.0** (2026-10-23) — New shared look (colour kit copied into `app/static/kck-ui/`): the app now has **Light, Dark and Auto** modes (*Theme* button in the header) and a **colour theme** picker (blue default, teal, green, amber, violet, graphite) next to *Sign out*; both choices are remembered per browser, also on the sign-in page. All page colours now come from the kit, so every theme works in both modes; upload stays blue and download green in every theme. Narrow screens: header, filter row and tabs no longer push the page sideways. No logic, schema or config change; `Dockerfile` and `docker-compose.yml` unchanged (rebuild needed because the app files changed).

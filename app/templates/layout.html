@@ -14,7 +14,10 @@
      Only this app's own layout and components are below. Colours: kit tokens only, never hard-coded. */
   body{margin:0;font:14px/1.45 var(--font);background:var(--bg);color:var(--text)}
   a{color:var(--brand-ink)}
-  header{background:var(--brand);color:var(--on-brand);padding:12px 10px;display:flex;align-items:center;gap:12px;flex-wrap:wrap}
+  :root{--hd-bg:var(--brand);--hd-fg:var(--on-brand);--hd-line:transparent}
+  @media (prefers-color-scheme:dark){:root:not([data-theme="light"])[data-palette="graphite"]{--hd-bg:var(--panel);--hd-fg:var(--text);--hd-line:var(--line)}}
+  :root[data-theme="dark"][data-palette="graphite"]{--hd-bg:var(--panel);--hd-fg:var(--text);--hd-line:var(--line)}
+  header{background:var(--hd-bg);color:var(--hd-fg);border-bottom:1px solid var(--hd-line);padding:12px 10px;display:flex;align-items:center;gap:12px;flex-wrap:wrap}
   header h1{margin:0;font-size:18px;font-weight:600}
   header span{opacity:.75;font-size:13px}
   main{max-width:none;margin:10px 0;padding:0 8px}
@@ -27,15 +30,15 @@
   /* header nav (white-on-brand text buttons, not kit buttons) */
   nav{display:flex;gap:4px;margin-left:auto;align-items:center;flex-wrap:wrap}
   nav form{display:flex;margin:0}
-  nav button.navbtn{background:transparent;border:0;border-radius:6px;color:var(--on-brand);opacity:.8;padding:6px 12px;font:inherit;font-weight:400;line-height:inherit;cursor:pointer}
-  nav button.navbtn:hover{background:color-mix(in srgb,var(--on-brand) 18%,transparent);opacity:1}
-  nav a{color:var(--on-brand);text-decoration:none;padding:6px 12px;border-radius:6px;opacity:.8}
-  nav a.active,nav a:hover{background:color-mix(in srgb,var(--on-brand) 18%,transparent);opacity:1}
+  nav button.navbtn{background:transparent;border:0;border-radius:6px;color:var(--hd-fg);opacity:.8;padding:6px 12px;font:inherit;font-weight:400;line-height:inherit;cursor:pointer}
+  nav button.navbtn:hover{background:color-mix(in srgb,var(--hd-fg) 18%,transparent);opacity:1}
+  nav a{color:var(--hd-fg);text-decoration:none;padding:6px 12px;border-radius:6px;opacity:.8}
+  nav a.active,nav a:hover{background:color-mix(in srgb,var(--hd-fg) 18%,transparent);opacity:1}
   nav .pal{gap:6px;margin:0 6px}
-  nav .pal__dot{width:20px;height:20px;border-color:color-mix(in srgb,var(--on-brand) 40%,transparent);background:var(--dot);padding:0}
-  nav .pal__dot:hover{border-color:var(--on-brand)}
-  nav .pal__dot[aria-pressed="true"]{border-color:var(--on-brand)}
-  nav .pal__dot:focus-visible{outline-color:var(--on-brand)}
+  nav .pal__dot{width:20px;height:20px;border-color:color-mix(in srgb,var(--hd-fg) 40%,transparent);background:var(--dot);padding:0}
+  nav .pal__dot:hover{border-color:var(--hd-fg)}
+  nav .pal__dot[aria-pressed="true"]{border-color:var(--hd-fg)}
+  nav .pal__dot:focus-visible{outline-color:var(--hd-fg)}
 
   /* spacing between kit surfaces and small layout helpers for kit components */
   .card{margin-bottom:12px}

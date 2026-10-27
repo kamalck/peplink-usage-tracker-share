@@ -7,7 +7,7 @@ import store
 import sqlite3
 from werkzeug.middleware.proxy_fix import ProxyFix
 
-VERSION = '1.10.0'
+VERSION = '1.10.1'
 
 
 def _secret_key():
@@ -131,6 +131,10 @@ def login():
             return render_template('login.html', next=nxt), 429
         if not _same(request.form.get('_csrf'), session.get('csrf')):
             flash('ERROR: session expired - please try again.')
+            if app.config['SESSION_COOKIE_SECURE'] and not request.is_secure:
+                flash('ERROR: the browser did not keep the sign-in cookie. If this page is open over plain http://, the cookie '
+                      '(HTTPS-only by default) is dropped: open the https:// address, or ask the admin to set '
+                      'SESSION_COOKIE_SECURE=0 in .env for http access.')
             return render_template('login.html', next=nxt)
         who = None
         for name, pw in ACCOUNTS.items():          # no early exit: same work whichever account matches

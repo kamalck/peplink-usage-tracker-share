@@ -222,6 +222,18 @@ class Security(unittest.TestCase):
         self.assertEqual(last, 429)
         self.assertEqual(attempt('10.2.2.2'), 200)
 
+    def test_plain_http_login_failure_explains_the_secure_cookie(self):
+        app, _ = load(SESSION_COOKIE_SECURE='1')
+        c = app.app.test_client()
+        c.get('/login')                                  # Secure cookie is not kept over http, so the CSRF token is lost
+        r = c.post('/login', data={'_csrf': 'whatever', 'username': 'admin', 'password': 'pw'})
+        text = r.get_data(as_text=True)
+        self.assertIn('session expired', text)
+        self.assertIn('SESSION_COOKIE_SECURE=0', text)
+        app0, _ = load(SESSION_COOKIE_SECURE='0')        # Secure off: no cookie hint, login works over http
+        c0, _t = signed_in(app0)
+        self.assertEqual(c0.get('/').status_code, 200)
+
     def test_old_lockout_entries_are_pruned(self):
         app, _ = load()
         app._fails.update({f'1.1.1.{i}': [1, 0, 0] for i in range(50)})

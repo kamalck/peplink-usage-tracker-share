@@ -131,6 +131,73 @@ class EventDates(unittest.TestCase):
         self.assertIn('swapped', ' '.join(flashes(c)))
 
 
+class EventCsv(unittest.TestCase):
+    """Event logs may be .csv as well as .xlsx (the portal's own CSV: month-first text dates, no padding, CRLF)."""
+    HEAD = 'Date/Time,Device,SSID,Client MAC,Client Name,Type,Details,Longitude,Latitude\r\n'
+
+    def line(self, when, mac, user, sep=','):
+        return sep.join([when, 'dev', 'ssid', mac, 'name', 'WiFi', f'guest account ID "{user}" [login]', '', '']) + '\r\n'
+
+    def setUp(self):
+        self.app, self.store = load()
+
+    def stored(self):
+        import sqlite3
+        con = sqlite3.connect(self.store.DB_PATH)
+        try:
+            return sorted(r[0][:16] for r in con.execute('SELECT ts FROM logins'))
+        finally:
+            con.close()
+
+    def test_portal_csv_with_bom_crlf_and_unpadded_dates(self):
+        body = ('\ufeff' + self.HEAD + self.line('10/1/2026 0:00', A, 'ana') + self.line('10/31/2026 23:57', B, 'bob')
+                + 'Failed login,x\r\n' + self.line('10/2/2026 9:05', A, 'ana')).encode('utf-8')
+        r = self.store.import_events('S', 'e.csv', io.BytesIO(body))
+        self.assertEqual((r['rows'], r['skipped'], r['repaired']), (3, 0, 0))
+        self.assertEqual(self.stored(), ['2026-10-01 00:00', '2026-10-02 09:05', '2026-10-31 23:57'])
+
+    def test_semicolon_csv_and_windows_1252_text(self):
+        body = (self.HEAD.replace(',', ';') + self.line('10/13/2026 7:15', A, 'ana', sep=';')
+                + self.line('10/14/2026 8:00', B, 'jos\xe9', sep=';')).encode('cp1252')
+        r = self.store.import_events('S', 'e.csv', io.BytesIO(body))
+        self.assertEqual((r['rows'], r['added']), (2, 2))
+
+    def test_same_logins_from_xlsx_and_csv_are_not_duplicated(self):
+        self.store.import_events('S', 'e.xlsx', events_xlsx((datetime(2026, 10, 13, 7, 15), A, 'ana')))
+        r = self.store.import_events('S', 'e.csv', io.BytesIO((self.HEAD + self.line('10/13/2026 7:15', A, 'ana')).encode()))
+        self.assertEqual((r['rows'], r['added']), (1, 0))
+
+    def test_csv_kind_detection(self):
+        import merge
+        self.assertEqual(merge.csv_kind(self.HEAD.encode()), 'events')
+        self.assertEqual(merge.csv_kind(usage_csv(('h', A, 1, 2))), 'usage')
+        self.assertEqual(merge.csv_kind(b'Client MAC,Details,MAC Address,Total (MB)\n'), 'both')
+        self.assertEqual(merge.csv_kind(b'a,b\n1,2\n'), 'unknown')
+
+    def test_import_page_routes_each_csv_by_its_header(self):
+        c, t = signed_in(self.app)
+        files = [(io.BytesIO((self.HEAD + self.line('10/1/2026 0:00', A, 'ana')).encode()), 'S_events.csv'),
+                 (io.BytesIO(usage_csv(('h', A, 1, 2))), 'S_usage_2026-10-01.csv'),
+                 (io.BytesIO(b'a,b\n1,2\n'), 'S_other_2026-10-01.csv')]
+        c.post('/import', data={'_csrf': t, 'site': 'S', 'files': files}, content_type='multipart/form-data')
+        text = ' | '.join(flashes(c))
+        self.assertIn('S_events.csv: 1 logins read, 1 new', text)
+        self.assertIn('S_usage_2026-10-01.csv: 1 devices stored', text)
+        self.assertIn('S_other_2026-10-01.csv: ERROR not recognised', text)
+        self.assertEqual(self.store.status('S')['days'], ['2026-10-01'])
+
+    def test_quick_merge_accepts_a_csv_event_log(self):
+        c, t = signed_in(self.app)
+        ev = (self.HEAD + self.line('10/1/2026 0:00', A, 'ana')).encode()
+        r = c.post('/quick', data={'_csrf': t, 'action': 'preview', 'events': (io.BytesIO(ev), 'e.csv'),
+                                   'usage': [(io.BytesIO(usage_csv(('h', A, 1, 2))), 'a_2026-10-01.csv'), (io.BytesIO(usage_csv(('h', A, 1, 2))), 'a_2026-10-02.csv')]},
+                   content_type='multipart/form-data')
+        self.assertIn('ana', r.get_data(as_text=True))
+        single = c.post('/quick', data={'_csrf': t, 'action': 'preview', 'events': (io.BytesIO(ev), 'e.csv'),
+                                        'usage': (io.BytesIO(usage_csv(('h', A, 1, 2))), 'a.csv')}, content_type='multipart/form-data')
+        self.assertIn('ana', single.get_data(as_text=True))
+
+
 class DeleteAndAudit(unittest.TestCase):
     def setUp(self):
         self.app, self.store = load()

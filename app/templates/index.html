@@ -3,9 +3,9 @@
   <input type="hidden" name="_csrf" value="{{ csrf_token() }}">
   <div class="form-grid">
     <div class="field">
-      <label>Starlink event log (.xlsx)</label>
-      <input type="file" name="events" accept=".xlsx" required>
-      <div class="hint">Portal export with <code>Client MAC</code> and <code>Details</code> columns</div>
+      <label>Starlink event log (.xlsx or .csv)</label>
+      <input type="file" name="events" accept=".xlsx,.csv" required>
+      <div class="hint">Portal export (.xlsx or .csv) with <code>Client MAC</code> and <code>Details</code> columns</div>
     </div>
     <div class="field">
       <label>Usage per device (.csv) — one file, or several daily files</label>

@@ -4,7 +4,7 @@ from datetime import datetime, date, timedelta
 import openpyxl
 from openpyxl.styles import Font, PatternFill
 from openpyxl.utils import get_column_letter
-from merge import parse_usage, LOGIN_RE, dev_label
+from merge import parse_usage, LOGIN_RE, dev_label, event_table
 
 DATE_RE = re.compile(r'(\d{4}-\d{2}-\d{2})')
 
@@ -59,10 +59,7 @@ def parse_events_stats(fileobj):
     Excel can mangle a portal export: dates that are valid as day/month stay as text ("10/31/2026 23:57") while the ones that
     could be read the other way round become real dates with day and month SWAPPED (10 Jan instead of 1 Oct). When a file
     mixes both and swapping puts the real-date cells right next to the text cells' period, they are repaired and counted."""
-    wb = openpyxl.load_workbook(fileobj, read_only=True, data_only=True)
-    ws = wb.active
-    rows = ws.iter_rows(values_only=True)
-    header = [str(h).strip().lower() if h else '' for h in next(rows)]
+    header, rows = event_table(fileobj)           # .xlsx or .csv, detected from the content
     def col(*names):
         for n in names:
             if n in header:
@@ -73,6 +70,8 @@ def parse_events_stats(fileobj):
         raise ValueError('Event log must have "Date/Time", "Client MAC" and "Details" columns')
     logins = []                             # (raw date cell, mac, user)
     for r in rows:
+        if len(r) <= max(i_dt, i_mac, i_det):
+            continue                        # short / blank CSV line
         det = r[i_det]
         m = LOGIN_RE.search(str(det)) if det else None
         if m:                               # not a login event (failed password, quota, blank row ...) is ignored

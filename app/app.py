@@ -1,13 +1,13 @@
-import os, sys, argparse, hmac, secrets, time
+import io, os, sys, argparse, hmac, secrets, time
 from datetime import datetime, date, timedelta
 from flask import Flask, render_template, request, send_file, flash, redirect, url_for, session
-from merge import merge, build_xlsx
+from merge import merge, build_xlsx, csv_kind
 from daily import merge_daily, build_daily_xlsx, compute, compute_period, device_pivot, build_period_xlsx, build_device_xlsx, build_period_device_xlsx, build_total_xlsx, unmatched_devices
 import store
 import sqlite3
 from werkzeug.middleware.proxy_fix import ProxyFix
 
-VERSION = '1.10.3'
+VERSION = '1.11.0'
 
 
 def _secret_key():
@@ -234,14 +234,24 @@ def do_import():
             continue
         try:
             low = f.filename.lower()
-            if low.endswith('.xlsx'):
+            data = f.stream.read()
+            kind_of_file = 'events' if low.endswith('.xlsx') else csv_kind(data) if low.endswith('.csv') else ''
+            if kind_of_file == 'both':
+                msgs.append(f'{f.filename}: ERROR the columns fit both an event log and a usage export - nothing imported')
+                continue
+            if low.endswith('.csv') and kind_of_file == 'unknown':
+                msgs.append(f'{f.filename}: ERROR not recognised - an event log needs "Client MAC" and "Details" columns, '
+                            f'a usage export needs "MAC Address" and "Total (MB)"')
+                continue
+            f.stream = io.BytesIO(data)
+            if kind_of_file == 'events':
                 r = store.import_events(fsite, f.filename, f.stream, user=who)
                 msgs.append(f'{f.filename}: {r["rows"]} logins read, {r["added"]} new ({r["first"]} → {r["last"]})'
                             + (f' - NOTE: {r["repaired"]} dates had day and month swapped (Excel changed the file) and were repaired' if r['repaired'] else '')
                             + (f' - WARNING: {r["future"]} login rows dated in the future were NOT imported (date format problem?)' if r['future'] else '')
                             + (f' - WARNING: {r["skipped"]} login rows skipped (date or MAC unreadable)' if r['skipped'] else '')
                             + (' - WARNING: day/month order of the text dates could not be determined, month first assumed' if r['ambiguous'] else ''))
-            elif low.endswith('.csv'):
+            elif kind_of_file == 'usage':
                 period = kind == 'period'
                 if period:
                     r = store.import_period(fsite, f.filename, f.stream, start=p_start, user=who)
@@ -250,7 +260,7 @@ def do_import():
                     r = store.import_usage(fsite, f.filename, f.stream, user=who)
                     msgs.append(f'{f.filename}: {r["rows"]} devices stored for {r["day"]}')
             else:
-                msgs.append(f'{f.filename}: ERROR unsupported file type (event log = .xlsx, usage = .csv)')
+                msgs.append(f'{f.filename}: ERROR unsupported file type (event log = .xlsx or .csv, usage = .csv)')
                 continue
             site = site or fsite
         except Exception as e:
@@ -425,7 +435,9 @@ def cli():
             if not site:
                 print(f'{name}: skipped (no site)'); continue
             with open(f, 'rb') as fh:
-                if name.lower().endswith('.xlsx'):
+                data = fh.read()
+                fh = io.BytesIO(data)
+                if name.lower().endswith('.xlsx') or csv_kind(data) == 'events':
                     r = store.import_events(site, name, fh); print(f'{name}: {r["rows"]} logins, {r["added"]} new ({r["first"]} → {r["last"]})')
                 else:
                     r = store.import_usage(site, name, fh); print(f'{name}: {r["rows"]} devices for {r["day"]}')

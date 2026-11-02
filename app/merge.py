@@ -1,6 +1,5 @@
-"""Core logic: join Starlink portal login events (xlsx) with per-device usage (csv)."""
+"""Core logic: join Starlink portal login events (xlsx or csv) with per-device usage (csv)."""
 import csv, io, re, collections
-from datetime import datetime
 import openpyxl
 from openpyxl.styles import Font, PatternFill
 from openpyxl.utils import get_column_letter
@@ -14,40 +13,63 @@ def dev_label(mac, name):
     return f'{mac} ({name})' if name else mac
 
 
+def _to_bytes(fileobj):
+    data = fileobj.read() if hasattr(fileobj, 'read') else fileobj
+    return data.encode('utf-8') if isinstance(data, str) else data
+
+
+def _decode(data):
+    """CSV bytes -> text: UTF-8 (with or without BOM), else Windows-1252."""
+    try:
+        return data.decode('utf-8-sig')
+    except UnicodeDecodeError:
+        return data.decode('cp1252')
+
+
+def event_table(fileobj):
+    """Open an event log in either format and return (header, rows): an Excel workbook (detected by its zip signature, whatever the
+    file is called) or a CSV (comma, semicolon or tab separated). header = lower-cased column names; rows = lists of cell values."""
+    data = _to_bytes(fileobj)
+    if data[:2] == b'PK':
+        ws = openpyxl.load_workbook(io.BytesIO(data), read_only=True, data_only=True).active
+        rows = ws.iter_rows(values_only=True)
+        try:
+            first = next(rows)
+        except StopIteration:
+            raise ValueError('The event log is empty') from None
+        return [str(h).strip().lower() if h else '' for h in first], rows
+    text = _decode(data)
+    head = text.split('\n', 1)[0]
+    delim = max(',;\t', key=head.count) if any(d in head for d in ',;\t') else ','
+    rdr = csv.reader(io.StringIO(text, newline=''), delimiter=delim)
+    try:
+        first = next(rdr)
+    except StopIteration:
+        raise ValueError('The event log is empty') from None
+    return [h.strip().lower() for h in first], rdr
+
+
+def csv_kind(data):
+    """What a CSV is, from its header row: 'events' (portal event log), 'usage' (per-device usage), 'both', or 'unknown'."""
+    try:
+        header, _ = event_table(data)
+    except Exception:
+        return 'unknown'
+    ev = any(h in header for h in ('client mac', 'mac')) and any(h in header for h in ('details', 'event', 'message'))
+    us = any(h in header for h in ('mac address', 'mac')) and any(h in header for h in ('total (mb)', 'total'))
+    return 'both' if ev and us else 'events' if ev else 'usage' if us else 'unknown'
+
+
 def parse_event_log(fileobj):
-    """Return (logins{mac: Counter(user)}, last{mac: (dt, user)})."""
-    wb = openpyxl.load_workbook(fileobj, read_only=True, data_only=True)
-    ws = wb.active
-    rows = ws.iter_rows(values_only=True)
-    header = [str(h).strip().lower() if h else '' for h in next(rows)]
-    def col(*names):
-        for n in names:
-            if n in header:
-                return header.index(n)
-        return None
-    i_dt, i_mac, i_det = col('date/time', 'date', 'time'), col('client mac', 'mac'), col('details', 'event', 'message')
-    if i_mac is None or i_det is None:
-        raise ValueError('Event log must have "Client MAC" and "Details" columns')
+    """Return (logins{mac: Counter(user)}, last{mac: (dt, user)}) from an event log (.xlsx or .csv)."""
+    from daily import parse_events_stats          # same date handling as the stored import (text dates, swapped dates)
+    ev, _ = parse_events_stats(fileobj)
     logins = collections.defaultdict(collections.Counter)
     last = {}
-    for r in rows:
-        mac, det = r[i_mac], r[i_det]
-        if not mac or not det:
-            continue
-        m = LOGIN_RE.search(str(det))
-        if not m:
-            continue
-        mac = str(mac).strip().upper().replace('-', ':')
-        user = m.group(1)
-        logins[mac][user] += 1
-        dt = r[i_dt] if i_dt is not None else None
-        if isinstance(dt, str):
-            try:
-                dt = datetime.fromisoformat(dt)
-            except ValueError:
-                dt = None
-        if dt and (mac not in last or dt > last[mac][0]):
-            last[mac] = (dt, user)
+    for mac, lst in ev.items():
+        for dt, user in lst:
+            logins[mac][user] += 1
+        last[mac] = lst[-1]
     return logins, last
 
 

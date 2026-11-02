@@ -152,6 +152,17 @@ def delete_data(site, what, start=None, end=None, user=''):
     return n
 
 
+STALE_DAYS = 2          # the newest loaded day is "old" when it is more than this many days behind today
+
+
+def data_age(last_day, today=None):
+    """(days since the newest loaded day, stale?) - ('', False) when nothing is loaded."""
+    if not last_day:
+        return None, False
+    age = ((today or date.today()) - date.fromisoformat(last_day)).days
+    return age, age > STALE_DAYS
+
+
 def sites():
     with connect() as con:
         return sorted({r[0] for r in con.execute(
@@ -169,6 +180,7 @@ def sites_overview():
             out.append({'site': site, 'at': last[0] if last else '', 'kind': last[1] if last else '', 'file': last[2] if last else '',
                         'rows': last[3] if last else 0, 'span': (f'{last[4]} → {last[5]}' if last and last[4] != last[5] else (last[4] if last else '')) or '',
                         'last_day': day[0] or '', 'days': day[1], 'last_login': (lg[0] or '')[:16]})
+            out[-1]['age'], out[-1]['stale'] = data_age(day[0])
     out.sort(key=lambda r: r['at'], reverse=True)
     return out
 
@@ -211,7 +223,8 @@ def status(site):
                 gaps.append(cur.isoformat())
             cur = date.fromordinal(cur.toordinal() + 1)
     segments = day_segments(days)
-    return {'days': days, 'gaps': gaps, 'segments': segments, 'ranges': sum(1 for x in segments if x['kind'] == 'ok'),
+    age, stale = data_age(days[-1] if days else '')
+    return {'age': age, 'stale': stale, 'days': days, 'gaps': gaps, 'segments': segments, 'ranges': sum(1 for x in segments if x['kind'] == 'ok'),
             'span_days': sum(x['n'] for x in segments), 'logins': lg[0], 'log_first': lg[1] or '', 'log_last': lg[2] or '', 'imports': imports, 'periods': periods}
 
 

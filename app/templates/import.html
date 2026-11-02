@@ -13,7 +13,7 @@
 {% if overview %}
 <div class="card"><b>Sites — last entry added</b> <span class="hint">(click a site to show its import status below)</span>
 <div class="table-wrap scroll mt" style="max-height:30vh"><table class="grid" id="overview"><thead><tr><th>Site</th><th>Last entry added</th><th>Kind</th><th>File</th><th>Covers</th><th class="num">Rows</th><th>Latest usage day</th><th>Latest login</th></tr></thead>
-<tbody>{% for o in overview %}<tr data-site="{{ o.site }}" class="{{ 'is-selected' if o.site==site }}"><td><b>{{ o.site }}</b></td><td>{{ o.at or '—' }}</td><td>{{ o.kind }}</td><td>{{ o.file }}</td><td>{{ o.span }}</td><td class="num">{{ o.rows }}</td><td>{{ o.last_day or '—' }}</td><td>{{ o.last_login or '—' }}</td></tr>{% endfor %}</tbody></table></div></div>
+<tbody>{% for o in overview %}<tr data-site="{{ o.site }}" class="{{ 'is-selected' if o.site==site }}"><td><b>{{ o.site }}</b></td><td>{{ o.at or '—' }}</td><td>{{ o.kind }}</td><td>{{ o.file }}</td><td>{{ o.span }}</td><td class="num">{{ o.rows }}</td><td>{{ o.last_day or '—' }}{% if o.stale %} <span class="pill bad">{{ o.age }} days old</span>{% endif %}</td><td>{{ o.last_login or '—' }}</td></tr>{% endfor %}</tbody></table></div></div>
 {% endif %}
 <div id="sitepanel">{% include '_site_status.html' %}</div>
 <style>#overview tbody tr{cursor:pointer}</style>

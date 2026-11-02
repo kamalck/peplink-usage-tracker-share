@@ -3,6 +3,7 @@
 <div class="days">
   <b>Days loaded</b>
   <div class="sum">
+    {% if st.stale %}<span class="pill bad" title="The newest loaded day is {{ st.days[-1] }}">Last data {{ st.age }} days old</span>{% endif %}
     {% if st.gaps %}<span class="pill bad">{{ st.gaps|length }} day{{ 's' if st.gaps|length != 1 }} missing</span>{% else %}<span class="pill ok">No gaps</span>{% endif %}
     <span class="pill gray">{{ st.days|length }} day{{ 's' if st.days|length != 1 }} loaded</span>
     <span class="pill gray">{{ st.ranges }} range{{ 's' if st.ranges != 1 }}</span>

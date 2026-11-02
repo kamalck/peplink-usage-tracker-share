@@ -231,6 +231,35 @@ class DaysLoaded(unittest.TestCase):
         self.assertNotIn('rng miss', html)
 
 
+class StaleData(unittest.TestCase):
+    def setUp(self):
+        self.app, self.store = load()
+
+    def load_day(self, days_ago):
+        from datetime import timedelta
+        d = date.today() - timedelta(days=days_ago)
+        self.store.import_usage('S', f'x_{d}.csv', io.BytesIO(usage_csv(('h', A, 1, 2))))
+
+    def test_age_rule(self):
+        today = date(2026, 11, 10)
+        self.assertEqual(self.store.data_age('2026-11-10', today), (0, False))
+        self.assertEqual(self.store.data_age('2026-11-08', today), (2, False))     # still normal: yesterday's export may not be in yet
+        self.assertEqual(self.store.data_age('2026-11-07', today), (3, True))
+        self.assertEqual(self.store.data_age('', today), (None, False))
+
+    def test_warning_shows_on_old_data_only(self):
+        self.load_day(7)
+        c, _t = signed_in(self.app)
+        self.assertIn('Last data 7 days old', c.get('/site_panel?site=S').get_data(as_text=True))
+        self.assertIn('7 days old', c.get('/').get_data(as_text=True))             # also in the sites table
+
+    def test_no_warning_when_data_is_current(self):
+        self.load_day(1)
+        c, _t = signed_in(self.app)
+        self.assertNotIn('Last data', c.get('/site_panel?site=S').get_data(as_text=True))
+        self.assertNotIn('days old', c.get('/').get_data(as_text=True))
+
+
 class DeleteAndAudit(unittest.TestCase):
     def setUp(self):
         self.app, self.store = load()

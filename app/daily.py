@@ -1,6 +1,6 @@
 """Per-day attribution: join daily usage exports (one CSV per day) with portal login events."""
 import re, io, collections
-from datetime import datetime, date
+from datetime import datetime, date, timedelta
 import openpyxl
 from openpyxl.styles import Font, PatternFill
 from openpyxl.utils import get_column_letter
@@ -30,8 +30,35 @@ def parse_events_by_day(fileobj):
     return parse_events_stats(fileobj)[0]
 
 
+_US = ('%m/%d/%Y %H:%M:%S', '%m/%d/%Y %H:%M', '%m/%d/%Y')
+_EU = ('%d/%m/%Y %H:%M:%S', '%d/%m/%Y %H:%M', '%d/%m/%Y')
+
+
+def _strptime(text, fmts):
+    for f in fmts:
+        try:
+            return datetime.strptime(text, f)
+        except ValueError:
+            pass
+    return None
+
+
+def _swap(dt):
+    """Day and month exchanged (None when that is not a valid date)."""
+    try:
+        return dt.replace(month=dt.day, day=dt.month)
+    except ValueError:
+        return None
+
+
 def parse_events_stats(fileobj):
-    """Like parse_events_by_day but returns (events, skipped): skipped = login rows ignored because the date/MAC was missing or unreadable."""
+    """Parse an event log. Returns (events, info): events = {mac: [(datetime, user), ...]} (successful logins only);
+    info = {'skipped': login rows ignored (date or MAC unreadable), 'repaired': dates fixed by swapping day and month,
+    'text_dates': dates read from text cells, 'ambiguous': True when the text day/month order had to be assumed}.
+
+    Excel can mangle a portal export: dates that are valid as day/month stay as text ("10/31/2026 23:57") while the ones that
+    could be read the other way round become real dates with day and month SWAPPED (10 Jan instead of 1 Oct). When a file
+    mixes both and swapping puts the real-date cells right next to the text cells' period, they are repaired and counted."""
     wb = openpyxl.load_workbook(fileobj, read_only=True, data_only=True)
     ws = wb.active
     rows = ws.iter_rows(values_only=True)
@@ -44,25 +71,58 @@ def parse_events_stats(fileobj):
     i_dt, i_mac, i_det = col('date/time', 'date', 'time'), col('client mac', 'mac'), col('details', 'event', 'message')
     if i_dt is None or i_mac is None or i_det is None:
         raise ValueError('Event log must have "Date/Time", "Client MAC" and "Details" columns')
-    ev = collections.defaultdict(list)
-    skipped = 0
+    logins = []                             # (raw date cell, mac, user)
     for r in rows:
-        dt, mac, det = r[i_dt], r[i_mac], r[i_det]
+        det = r[i_det]
         m = LOGIN_RE.search(str(det)) if det else None
-        if not m:
-            continue                        # not a login event (failed password, quota, blank row ...)
-        if isinstance(dt, str):
+        if m:                               # not a login event (failed password, quota, blank row ...) is ignored
+            logins.append((r[i_dt], r[i_mac], m.group(1)))
+    # text cells: ISO, or day/month order decided from the cells that can only be read one way
+    us_only = eu_only = 0
+    for raw, _, _ in logins:
+        if isinstance(raw, str):
+            t = raw.strip()
+            us, eu = _strptime(t, _US), _strptime(t, _EU)
+            us_only += bool(us and not eu)
+            eu_only += bool(eu and not us)
+    slash_fmts = _EU if eu_only > us_only else _US
+    parsed, text_dates, slash_dates = [], [], []
+    for raw, mac, user in logins:
+        dt = raw
+        is_text = isinstance(raw, str)
+        if is_text:
+            t = raw.strip()
             try:
-                dt = datetime.fromisoformat(dt.strip())
+                dt = datetime.fromisoformat(t)
             except ValueError:
-                dt = None
+                dt = _strptime(t, slash_fmts)
+                if dt:
+                    slash_dates.append(dt)          # only these can prove an Excel day/month swap
+        if is_text and dt:
+            text_dates.append(dt)
+        parsed.append([dt if isinstance(dt, datetime) else None, mac, user, is_text])
+    info = {'skipped': 0, 'repaired': 0, 'text_dates': len(text_dates), 'ambiguous': bool(text_dates) and not (us_only or eu_only)}
+    # repair swapped real dates (only with evidence: text cells give the file's true period)
+    real = [p for p in parsed if p[0] and not p[3]]
+    if slash_dates and real:
+        lo, hi = min(slash_dates) - timedelta(days=31), max(slash_dates) + timedelta(days=31)
+        swapped = [_swap(p[0]) for p in real]
+        in_swapped = sum(1 for x in swapped if x and lo <= x <= hi)
+        in_orig = sum(1 for p in real if lo <= p[0] <= hi)
+        if in_swapped >= 0.95 * len(real) and in_orig < 0.5 * len(real):
+            for p, x in zip(real, swapped):
+                if x:
+                    p[0] = x
+                    info['repaired'] += 1
+    ev = collections.defaultdict(list)
+    for dt, mac, user, _ in parsed:
         if not (dt and mac):
-            skipped += 1                    # a login we could not place in time - counted, never silent
+            info['skipped'] += 1            # a login we could not place in time - counted, never silent
             continue
-        ev[str(mac).strip().upper().replace('-', ':')].append((dt, m.group(1)))
+        ev[str(mac).strip().upper().replace('-', ':')].append((dt, user))
     for k in ev:
         ev[k].sort()
-    return ev, skipped
+    return ev, info
 
 
 def attribute(ev_list, day):

@@ -87,6 +87,50 @@ class Imports(unittest.TestCase):
         self.assertEqual((r['start'], r['end']), (date(2026, 10, 3), date(2026, 10, 9)))
 
 
+class EventDates(unittest.TestCase):
+    """Excel-mangled event logs: real dates with day/month swapped next to text dates (found in a real export)."""
+    def setUp(self):
+        self.app, self.store = load()
+
+    def stored(self):
+        import sqlite3
+        con = sqlite3.connect(self.store.DB_PATH)
+        try:
+            return sorted(r[0][:10] for r in con.execute('SELECT ts FROM logins'))
+        finally:
+            con.close()
+
+    def test_swapped_real_dates_are_repaired_using_the_text_dates(self):
+        # true dates 1-3 Oct became real dates 10 Jan/Feb/Mar; 13-15 Oct stayed text "MM/DD/YYYY HH:MM"
+        f = events_xlsx((datetime(2026, 1, 10, 8), A, 'ana'), (datetime(2026, 2, 10, 9), A, 'ana'), (datetime(2026, 3, 10, 9), B, 'bob'),
+                        ('10/13/2026 07:15', A, 'ana'), ('10/14/2026 23:57', B, 'bob'), ('10/15/2026 00:01', A, 'ana'))
+        r = self.store.import_events('S', 'e.xlsx', f)
+        self.assertEqual((r['rows'], r['skipped'], r['repaired'], r['text_dates']), (6, 0, 3, 3))
+        self.assertEqual(self.stored(), ['2026-10-01', '2026-10-02', '2026-10-03', '2026-10-13', '2026-10-14', '2026-10-15'])
+
+    def test_day_first_text_dates_are_recognised(self):
+        f = events_xlsx(('13/10/2026 07:15', A, 'ana'), ('31/10/2026 23:57', B, 'bob'))
+        self.store.import_events('S', 'e.xlsx', f)
+        self.assertEqual(self.stored(), ['2026-10-13', '2026-10-31'])
+
+    def test_iso_text_dates_and_plain_real_dates_are_left_alone(self):
+        f = events_xlsx(('2026-10-13 07:15:00', A, 'ana'), (datetime(2026, 1, 10, 8), B, 'bob'), (datetime(2026, 6, 10, 8), B, 'bob'))
+        r = self.store.import_events('S', 'e.xlsx', f)
+        self.assertEqual(r['repaired'], 0)                   # no slash-text dates to prove a swap: nothing is guessed
+        self.assertEqual(self.stored(), ['2026-01-10', '2026-06-10', '2026-10-13'])
+
+    def test_future_dated_logins_are_not_imported(self):
+        f = events_xlsx((datetime(2026, 10, 1, 8), A, 'ana'), (datetime(2099, 1, 10, 8), A, 'ana'))
+        r = self.store.import_events('S', 'e.xlsx', f)
+        self.assertEqual((r['added'], r['future']), (1, 1))
+
+    def test_import_page_explains_repairs(self):
+        c, t = signed_in(self.app)
+        f = events_xlsx((datetime(2026, 1, 10, 8), A, 'ana'), ('10/13/2026 07:15', A, 'ana'))
+        c.post('/import', data={'_csrf': t, 'site': 'S', 'files': [(f, 'e.xlsx')]}, content_type='multipart/form-data')
+        self.assertIn('swapped', ' '.join(flashes(c)))
+
+
 class DeleteAndAudit(unittest.TestCase):
     def setUp(self):
         self.app, self.store = load()

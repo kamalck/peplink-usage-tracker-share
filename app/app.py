@@ -7,7 +7,7 @@ import store
 import sqlite3
 from werkzeug.middleware.proxy_fix import ProxyFix
 
-VERSION = '1.10.2'
+VERSION = '1.10.3'
 
 
 def _secret_key():
@@ -237,7 +237,10 @@ def do_import():
             if low.endswith('.xlsx'):
                 r = store.import_events(fsite, f.filename, f.stream, user=who)
                 msgs.append(f'{f.filename}: {r["rows"]} logins read, {r["added"]} new ({r["first"]} → {r["last"]})'
-                            + (f' - WARNING: {r["skipped"]} login rows skipped (date or MAC unreadable)' if r['skipped'] else ''))
+                            + (f' - NOTE: {r["repaired"]} dates had day and month swapped (Excel changed the file) and were repaired' if r['repaired'] else '')
+                            + (f' - WARNING: {r["future"]} login rows dated in the future were NOT imported (date format problem?)' if r['future'] else '')
+                            + (f' - WARNING: {r["skipped"]} login rows skipped (date or MAC unreadable)' if r['skipped'] else '')
+                            + (' - WARNING: day/month order of the text dates could not be determined, month first assumed' if r['ambiguous'] else ''))
             elif low.endswith('.csv'):
                 period = kind == 'period'
                 if period:

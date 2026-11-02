@@ -62,15 +62,18 @@ def _log(con, site, kind, filename, rows, added, first, last, user):
 
 
 def import_events(site, filename, fileobj, user=''):
-    ev, skipped = parse_events_stats(fileobj)
-    rows = [(site, dt.isoformat(sep=' '), mac, user) for mac, lst in ev.items() for dt, user in lst]
+    ev, info = parse_events_stats(fileobj)
+    limit = datetime.now() + timedelta(days=2)                # a login dated in the future is a date-format error, not data
+    rows = [(site, dt.isoformat(sep=' '), mac, user) for mac, lst in ev.items() for dt, user in lst if dt <= limit]
+    future = sum(1 for lst in ev.values() for dt, _ in lst if dt > limit)
     ts = sorted(r[1] for r in rows)
     with connect() as con:
         before = con.execute('SELECT COUNT(*) FROM logins WHERE site=?', (site,)).fetchone()[0]
         con.executemany('INSERT OR IGNORE INTO logins VALUES (?,?,?,?)', rows)
         after = con.execute('SELECT COUNT(*) FROM logins WHERE site=?', (site,)).fetchone()[0]
         _log(con, site, 'events', filename, len(rows), after - before, ts[0] if ts else None, ts[-1] if ts else None, user)
-    return {'rows': len(rows), 'added': after - before, 'first': ts[0] if ts else '', 'last': ts[-1] if ts else '', 'skipped': skipped}
+    return {'rows': len(rows), 'added': after - before, 'first': ts[0] if ts else '', 'last': ts[-1] if ts else '', 'skipped': info['skipped'], 'repaired': info['repaired'],
+            'text_dates': info['text_dates'], 'future': future, 'ambiguous': info['ambiguous']}
 
 
 def import_usage(site, filename, fileobj, day=None, user=''):

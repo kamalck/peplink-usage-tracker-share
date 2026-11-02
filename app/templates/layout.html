@@ -25,6 +25,19 @@
   code{background:var(--raised);padding:1px 5px;border-radius:4px}
   pre{background:var(--raised);padding:10px;border-radius:var(--r-sm);overflow-x:auto}
   .hide{display:none!important}
+  /* days-loaded timeline (Import page) and missing-day chips (Report): loaded = --info, missing = --bad, kit tokens only */
+  .days .sum{display:flex;flex-wrap:wrap;gap:8px;align-items:center;margin:8px 0 10px}
+  .tl{display:flex;flex-wrap:wrap;gap:6px;align-items:center}
+  .rng{display:inline-flex;align-items:center;gap:8px;padding:5px 11px;border-radius:8px;background:var(--info-bg);color:var(--info);font-weight:600;font-size:13px;white-space:nowrap}
+  .rng small{font-weight:400;opacity:.85}
+  .rng.miss{background:var(--bad-bg);color:var(--bad);border:1px solid var(--bad)}
+  .rng.miss::before{content:"\26A0";font-size:12px}
+  .rng .arrow{color:inherit;opacity:.7}
+  .strip{display:flex;flex-wrap:wrap;gap:3px;margin-top:12px}
+  .strip i{width:14px;height:18px;border-radius:3px;background:var(--info);opacity:.55;display:block}
+  .strip i.m{background:var(--bad);opacity:1}
+  .days .lbl{color:var(--muted);font-size:12px;margin-top:8px}
+  .stat.bad b{color:var(--bad)}
   .mt{margin-top:12px}
 
   /* header nav (white-on-brand text buttons, not kit buttons) */

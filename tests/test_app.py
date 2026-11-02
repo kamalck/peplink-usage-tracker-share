@@ -198,6 +198,39 @@ class EventCsv(unittest.TestCase):
         self.assertIn('ana', single.get_data(as_text=True))
 
 
+class DaysLoaded(unittest.TestCase):
+    def setUp(self):
+        self.app, self.store = load()
+
+    def test_segments_show_ranges_and_gaps_inside_the_span_only(self):
+        segs = self.store.day_segments(['2026-10-01', '2026-10-02', '2026-10-05', '2026-10-07', '2026-10-08'])
+        self.assertEqual([(x['kind'], x['a'], x['b'], x['n']) for x in segs],
+                         [('ok', '2026-10-01', '2026-10-02', 2), ('miss', '2026-10-03', '2026-10-04', 2), ('ok', '2026-10-05', '2026-10-05', 1),
+                          ('miss', '2026-10-06', '2026-10-06', 1), ('ok', '2026-10-07', '2026-10-08', 2)])
+        self.assertEqual(self.store.day_segments([]), [])
+        self.assertEqual([x['kind'] for x in self.store.day_segments(['2026-10-01', '2026-10-02'])], ['ok'])
+
+    def test_import_page_shows_ranges_and_red_missing_days_and_report_lists_gaps(self):
+        for d in ('01', '02', '05'):
+            self.store.import_usage('S', f'x_2026-10-{d}.csv', io.BytesIO(usage_csv(('h', A, 1, 2))))
+        c, _t = signed_in(self.app)
+        html = c.get('/site_panel?site=S').get_data(as_text=True)
+        self.assertIn('2 days missing', html)
+        self.assertIn('rng miss', html)
+        self.assertIn('missing 2026-10-03', html)
+        self.assertIn('2 ranges', html)
+        rep = c.get('/report?site=S&start=2026-10-01&end=2026-10-05').get_data(as_text=True)
+        self.assertIn('2 days missing in store', rep)
+
+    def test_complete_history_says_no_gaps(self):
+        for d in ('01', '02', '03'):
+            self.store.import_usage('S', f'x_2026-10-{d}.csv', io.BytesIO(usage_csv(('h', A, 1, 2))))
+        c, _t = signed_in(self.app)
+        html = c.get('/site_panel?site=S').get_data(as_text=True)
+        self.assertIn('No gaps', html)
+        self.assertNotIn('rng miss', html)
+
+
 class DeleteAndAudit(unittest.TestCase):
     def setUp(self):
         self.app, self.store = load()

@@ -10,7 +10,7 @@
     <button class="btn secondary" id="dl1" name="download" value="1">Download Excel</button>
     <button class="btn secondary" id="dl2" name="download" value="device">Download per device</button>
   </div>
-  {% if st.gaps %}<div class="hint mt">Missing days in store: {{ st.gaps|join(', ') }}</div>{% endif %}
+  {% if st.gaps %}<div class="tl mt"><span class="pill bad">{{ st.gaps|length }} day{{ 's' if st.gaps|length != 1 }} missing in store</span>{% for x in st.segments if x.kind == 'miss' %}<span class="rng miss">{{ x.a }}{% if x.n > 1 %} <span class="arrow">&rarr;</span> {{ x.b }} <small>{{ x.n }} days</small>{% endif %}</span>{% endfor %}</div>{% endif %}
 </form>
 {% include '_daily.html' %}
 {% endblock %}

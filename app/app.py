@@ -7,7 +7,7 @@ import store
 import sqlite3
 from werkzeug.middleware.proxy_fix import ProxyFix
 
-VERSION = '1.11.0'
+VERSION = '1.12.0'
 
 
 def _secret_key():

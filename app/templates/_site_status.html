@@ -2,13 +2,12 @@
 <div class="stats">
   <div class="stat"><b>{{ site }}</b><span>site</span></div>
   <div class="stat"><b>{{ st.days|length }}</b><span>days of usage {% if st.days %}({{ st.days[0] }} → {{ st.days[-1] }}){% endif %}</span></div>
-  <div class="stat"><b>{{ st.gaps|length }}</b><span>missing days in range</span></div>
+  <div class="stat{{ ' bad' if st.gaps }}"><b>{{ st.gaps|length }}</b><span>missing days in range</span></div>
   <div class="stat"><b>{{ '{:,}'.format(st.logins) }}</b><span>logins stored</span></div>
   <div class="stat"><b style="font-size:14px">{{ st.log_first[:16] }}<br>{{ st.log_last[:16] }}</b><span>event log coverage</span></div>
 </div>
 <div class="card">
-  <div class="chips"><b>Days loaded:</b> {% for d in st.days %}<span class="tag">{{ d }}</span>{% endfor %}</div>
-  {% if st.gaps %}<div class="chips"><b>Missing:</b> {% for d in st.gaps %}<span class="pill bad">{{ d }}</span>{% endfor %}</div>{% endif %}
+  {% if st.days %}{% include '_days.html' %}{% else %}<b>Days loaded</b> <span class="muted">none yet</span>{% endif %}
   <div class="mt"><a class="btn" href="{{ url_for('report', site=site) }}">Open report →</a></div>
 </div>
 {% if st.periods %}<div class="card"><div class="chips"><b>7-day / period files:</b>

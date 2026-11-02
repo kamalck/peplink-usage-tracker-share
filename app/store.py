@@ -173,6 +173,27 @@ def sites_overview():
     return out
 
 
+def day_segments(days):
+    """Loaded days (sorted ISO strings) -> the timeline from the first to the last day as runs:
+    [{'kind': 'ok'|'miss', 'a': first day, 'b': last day, 'n': days in the run}]. Days between two loaded days that are not
+    loaded form a 'miss' run (a gap); there is nothing before the first or after the last loaded day."""
+    out = []
+    have = set(days)
+    if not days:
+        return out
+    cur = date.fromisoformat(days[0])
+    end = date.fromisoformat(days[-1])
+    while cur <= end:
+        kind = 'ok' if cur.isoformat() in have else 'miss'
+        if out and out[-1]['kind'] == kind:
+            out[-1]['b'] = cur.isoformat()
+            out[-1]['n'] += 1
+        else:
+            out.append({'kind': kind, 'a': cur.isoformat(), 'b': cur.isoformat(), 'n': 1})
+        cur += timedelta(days=1)
+    return out
+
+
 def status(site):
     with connect() as con:
         days = [r[0] for r in con.execute('SELECT DISTINCT day FROM usage_daily WHERE site=? ORDER BY day', (site,))]
@@ -189,7 +210,9 @@ def status(site):
             if cur.isoformat() not in have:
                 gaps.append(cur.isoformat())
             cur = date.fromordinal(cur.toordinal() + 1)
-    return {'days': days, 'gaps': gaps, 'logins': lg[0], 'log_first': lg[1] or '', 'log_last': lg[2] or '', 'imports': imports, 'periods': periods}
+    segments = day_segments(days)
+    return {'days': days, 'gaps': gaps, 'segments': segments, 'ranges': sum(1 for x in segments if x['kind'] == 'ok'),
+            'span_days': sum(x['n'] for x in segments), 'logins': lg[0], 'log_first': lg[1] or '', 'log_last': lg[2] or '', 'imports': imports, 'periods': periods}
 
 
 def load_for_report(site, start, end):

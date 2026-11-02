@@ -1,0 +1,14 @@
+{# Timeline of loaded days as runs: blue = loaded range, red = missing run. Pass: st (store.status result). #}
+{% macro span(x) %}{% if x.a == x.b %}{{ x.a }}{% else %}{{ x.a }} <span class="arrow">&rarr;</span> {{ x.b }}{% endif %}{% endmacro %}
+<div class="days">
+  <b>Days loaded</b>
+  <div class="sum">
+    {% if st.gaps %}<span class="pill bad">{{ st.gaps|length }} day{{ 's' if st.gaps|length != 1 }} missing</span>{% else %}<span class="pill ok">No gaps</span>{% endif %}
+    <span class="pill gray">{{ st.days|length }} day{{ 's' if st.days|length != 1 }} loaded</span>
+    <span class="pill gray">{{ st.ranges }} range{{ 's' if st.ranges != 1 }}</span>
+    {% if st.days %}<span class="muted">{{ st.days[0] }} to {{ st.days[-1] }}</span>{% endif %}
+  </div>
+  <div class="tl">{% for x in st.segments %}{% if x.kind == 'ok' %}<span class="rng">{{ span(x) }} <small>{{ x.n }} day{{ 's' if x.n != 1 }}</small></span>{% else %}<span class="rng miss">missing {{ span(x) }}{% if x.n > 1 %} <small>{{ x.n }} days</small>{% endif %}</span>{% endif %}{% endfor %}</div>
+  {% if st.span_days and st.span_days <= 400 %}<div class="strip" aria-hidden="true">{% for x in st.segments %}{% for i in range(x.n) %}<i class="{{ 'm' if x.kind == 'miss' }}"></i>{% endfor %}{% endfor %}</div>
+  <div class="lbl">One block per day: blue = loaded, red = missing</div>{% endif %}
+</div>
